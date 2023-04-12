@@ -346,7 +346,6 @@ def main():
     print("start: " + stime)
     os.chdir(WD)
 
-    helper_functions.create_folder("02_identify_unique_owner_address_combinations")
     stretch_multiple_owners_to_separate_rows(
         owner_df_pth=OWNER_DF_PTH,
         owners_stretched_pth=OWNERS_STRETCHED_PTH,

@@ -460,7 +460,6 @@ def main():
     print("start: " + stime)
     os.chdir(WD)
 
-    helper_functions.create_folder("03_owner_name_classification")
     classify_owner_names_into_classes(
         owner_stretched_pth=OWNERS_STRETCHED_PTH,
         class_id_json_pth=CLASS_IDS_PTH,

@@ -571,7 +571,6 @@ def main():
     print("start: " + stime)
     os.chdir(WD)
 
-    helper_functions.create_folder("04_owner_class_reclassification")
     reclassify_owner_classes(
         owners_prelim_classified_pth=OWNERS_PRELIM_CLASSIFIED_PTH,
         classifier_json_pth=CLASSIFIER_PTH,

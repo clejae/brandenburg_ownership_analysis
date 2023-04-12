@@ -184,17 +184,15 @@ def main():
     print("start: " + stime)
     os.chdir(WD)
 
-    helper_functions.create_folder("01_clean_owner_strings")
-
-    # separate_geometries_from_owner_information(
-    #     orig_alkis_shp=ORIGINAL_ALKIS_SHP,
-    #     reduced_shp_out_pth=REDUCED_SHP_PTH
-    # )
-    # separate_owner_names_and_addresses(
-    #     reduced_shp_pth=REDUCED_SHP_PTH,
-    #     out_csv_manual_assignment_pth=MANUAL_ASSIGNMENT_PTH,
-    #     owner_df_out_pth=OWNER_DF_PTH
-    # )
+    separate_geometries_from_owner_information(
+        orig_alkis_shp=ORIGINAL_ALKIS_SHP,
+        reduced_shp_out_pth=REDUCED_SHP_PTH
+    )
+    separate_owner_names_and_addresses(
+        reduced_shp_pth=REDUCED_SHP_PTH,
+        out_csv_manual_assignment_pth=MANUAL_ASSIGNMENT_PTH,
+        owner_df_out_pth=OWNER_DF_PTH
+    )
     assign_missing_addresses_to_owners(
         owner_df_pth=OWNER_DF_PTH,
         csv_manual_assignment_pth=MANUAL_ASSIGNMENT_PTH[:-4] + '_corrected.csv'
@@ -203,6 +201,7 @@ def main():
     etime = time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime())
     print("start: " + stime)
     print("end: " + etime)
+
 
 if __name__ == '__main__':
     main()

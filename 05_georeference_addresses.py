@@ -525,8 +525,6 @@ def main():
     print("start: " + stime)
     os.chdir(WD)
 
-    helper_functions.create_folder("05_georeference_addresses")
-
     addresses_to_coordinates_with_osm_l1_data()
     addresses_to_coordinates_with_nominatim()
     address_to_coordinates_fuzzy_matching()
