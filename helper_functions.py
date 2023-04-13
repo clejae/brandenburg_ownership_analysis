@@ -99,6 +99,142 @@ def remove_address(text):
     return out_text
 
 
+def remove_street(owner_str, lookup_lst):
+    """
+    Remove street names from a string with help of a look-up list of key words.
+    :param owner_str: Input string
+    :param lookup_lst: Look up list of key words.
+    :return:
+    """
+    if owner_str != None:
+
+        str_lst = owner_str.split(" ")
+
+        if len(str_lst) > 1:
+            last = str_lst[-1]
+            for search_term in lookup_lst:
+                if search_term in last:
+                    owner_str = owner_str.replace(last, '')
+                    break
+
+    return owner_str
+
+
+def remove_address_part(text, delimiter, address_code_words):
+    """
+    Remove an address part in a text with a code word list.
+    :param text:  Input text
+    :param delimiter: Delimiter separating addresses from other parts.
+    :param address_code_words: Code word list.
+    :return:
+    """
+
+    if delimiter in text:
+        ## search for delimiter and get possible address part (i.e the last part of the text)
+        text_lst = text.split(delimiter)
+        address_part = text_lst[-1]
+
+        ## check if any of the code words is in address part
+        ## if so, remove the part from the text
+        for address_code in address_code_words:
+            if address_code in address_part:
+                out_text = ','.join(text_lst[:-1])
+                break
+            else:
+                out_text = text
+    else:
+        out_text = text
+
+    return out_text
+
+
+def clean_city_text(text, search_terms, num_words = 2):
+    ## e.g. remove all OT extensions (e.g. 'OT Manchow')
+    if text != None:
+
+        str_lst = text.split(" ")
+        for search_term in search_terms:
+            if search_term in str_lst:
+                i = str_lst.index(search_term)
+                sub_words = str_lst[i:i + num_words]
+                sub_words = ' '.join(sub_words)
+            else:
+                sub_words = ''
+
+            text = text.replace(sub_words, '')
+            text = text.strip()
+
+    else:
+        pass
+
+    return text
+
+
+def clean_address(address_str):
+    import re
+    ## clean
+    address_str = address_str.replace('ß', 'ss')
+    address_str = address_str.replace('ä', 'ae')
+    address_str = address_str.replace('ö', 'oe')
+    address_str = address_str.replace('ü', 'ue')
+    address_str = address_str.replace('.', '')
+    address_str = address_str.replace('-', ' ')
+    address_str = address_str.replace(':', '')
+
+    address_str = address_str.replace('strasse', 'str')
+
+    addresses = address_str.split('_')
+    addresses = [item.strip() for item in addresses]
+    addresses = [address for address in addresses if '00000' not in address]
+    addresses = [address for address in addresses if 'unbekannt' not in address]
+    lst = []
+
+    # address = addresses[1]
+    for address in addresses:
+
+        street = identify_street(address)
+        if street != '':
+            num = re.search('\d{1,4}\s?[a-f]?$', street)
+            number = street[int(num.span()[0]): int(num.span()[1])]
+            number = number.replace(' ', '')
+            if number[0] == '0':
+                number = number[1:]
+            else:
+                pass
+            street = street[:int(num.span()[0])]
+            street = street.strip()
+
+            street = street + ' ' + number + ', '
+
+        plz = identify_plz(address)
+
+        city = identify_city(address)
+        city = city.split('/')[0]
+        city = clean_city_text(city, search_terms=['bei', 'ot'])
+
+        if (plz + city) != '':
+            clean_add = street + plz + ' ' + city
+            lst.append(clean_add)
+
+    lst = set(lst)
+    if len(lst) > 1:
+        sorted_lst = sorted(lst, key=len)
+        lst = []
+
+        for i, item in enumerate(sorted_lst[:-1]):
+            if not any(item.replace(' ', '') in s_item.replace(' ', '') for s_item in sorted_lst[i+1:]):
+                lst.append(item)
+            else:
+                pass
+        lst.append(sorted_lst[-1])
+
+    lst = '_'.join(lst)
+
+    return lst
+
+############################################ String search #############################################################
+## e.g. address (part), birthdate or location identication
+
 def identify_owners(text, return_count=False):
     """
     Identify owner names in a text. Return count of owners, optionally.
@@ -173,7 +309,7 @@ def get_birthdate(str):
 
     return birthdate
 
-############################################ Address and location identication #########################################
+
 
 def find_addresses_in_string(owners, owner_string):
     """
@@ -363,141 +499,60 @@ def identify_city(text):
     return city
 
 
-def clean_city_text(text, search_terms, num_words = 2):
-    ## e.g. remove all OT extensions (e.g. 'OT Manchow')
-    if text != None:
+def check_occ_of_words_v1(text, search_terms, return_code):
+    """
+    Checks if any of the search terms from the input list occurs in the text. Only returns a true (1), if an entire
+    word from the text matches any search term, i.e. if a sub part of a word fits the search terms the return will be
+    false (0). Example: If the search term is "py" and the text is "python", there will be no match. Only "python" will
+    be matched with "python".
 
+    :param text: Input text. String.
+    :param search_terms: List of word that should be looked for. List of strings.
+    :return: Boolean integer. 1: there is a match, 0: there is no match.
+    """
+
+    check = 0
+
+    if text != None:
+        text = text.replace(',', ' ')
         str_lst = text.split(" ")
         for search_term in search_terms:
             if search_term in str_lst:
-                i = str_lst.index(search_term)
-                sub_words = str_lst[i:i + num_words]
-                sub_words = ' '.join(sub_words)
+                check = return_code
+                break
             else:
-                sub_words = ''
-
-            text = text.replace(sub_words, '')
-            text = text.strip()
-
+                pass
     else:
         pass
 
-    return text
+    return check
 
 
-def clean_address(address_str):
-    import re
-    ## clean
-    address_str = address_str.replace('ß', 'ss')
-    address_str = address_str.replace('ä', 'ae')
-    address_str = address_str.replace('ö', 'oe')
-    address_str = address_str.replace('ü', 'ue')
-    address_str = address_str.replace('.', '')
-    address_str = address_str.replace('-', ' ')
-    address_str = address_str.replace(':', '')
-
-    address_str = address_str.replace('strasse', 'str')
-
-    addresses = address_str.split('_')
-    addresses = [item.strip() for item in addresses]
-    addresses = [address for address in addresses if '00000' not in address]
-    addresses = [address for address in addresses if 'unbekannt' not in address]
-    lst = []
-
-    # address = addresses[1]
-    for address in addresses:
-
-        street = identify_street(address)
-        if street != '':
-            num = re.search('\d{1,4}\s?[a-f]?$', street)
-            number = street[int(num.span()[0]): int(num.span()[1])]
-            number = number.replace(' ', '')
-            if number[0] == '0':
-                number = number[1:]
-            else:
-                pass
-            street = street[:int(num.span()[0])]
-            street = street.strip()
-
-            street = street + ' ' + number + ', '
-
-        plz = identify_plz(address)
-
-        city = identify_city(address)
-        city = city.split('/')[0]
-        city = clean_city_text(city, search_terms=['bei', 'ot'])
-
-        if (plz + city) != '':
-            clean_add = street + plz + ' ' + city
-            lst.append(clean_add)
-
-    lst = set(lst)
-    if len(lst) > 1:
-        sorted_lst = sorted(lst, key=len)
-        lst = []
-
-        for i, item in enumerate(sorted_lst[:-1]):
-            if not any(item.replace(' ', '') in s_item.replace(' ', '') for s_item in sorted_lst[i+1:]):
-                lst.append(item)
-            else:
-                pass
-        lst.append(sorted_lst[-1])
-
-    lst = '_'.join(lst)
-
-    return lst
-
-
-def remove_street(owner_str, lookup_lst):
+def check_occ_of_words_v2(text, search_terms, return_code):
     """
-    Remove street names from a string with help of a look-up list of key words.
-    :param owner_str: Input string
-    :param lookup_lst: Look up list of key words.
-    :return:
-    """
-    if owner_str != None:
+    Checks if any of the search terms from the input list occurs in the text, also considers sub parts of words.
+    Example: If the search term is "py" and the text is "python", there will be a match.
 
-        str_lst = owner_str.split(" ")
-
-        if len(str_lst) > 1:
-            last = str_lst[-1]
-            for search_term in lookup_lst:
-                if search_term in last:
-                    owner_str = owner_str.replace(last, '')
-                    break
-
-    return owner_str
-
-
-def remove_address_part(text, delimiter, address_code_words):
-    """
-    Remove an address part in a text with a code word list.
-    :param text:  Input text
-    :param delimiter: Delimiter separating addresses from other parts.
-    :param address_code_words: Code word list.
-    :return:
+    :param text: Input text. String.
+    :param search_terms: List of word that should be looked for. List of strings.
+    :return: Boolean integer. 1: there is a match, 0: there is no match.
     """
 
-    if delimiter in text:
-        ## search for delimiter and get possible address part (i.e the last part of the text)
-        text_lst = text.split(delimiter)
-        address_part = text_lst[-1]
-
-        ## check if any of the code words is in address part
-        ## if so, remove the part from the text
-        for address_code in address_code_words:
-            if address_code in address_part:
-                out_text = ','.join(text_lst[:-1])
+    check = 0
+    if text != None:
+        for search_term in search_terms:
+            if search_term in text:
+                check = return_code
                 break
             else:
-                out_text = text
+                pass
     else:
-        out_text = text
+        pass
 
-    return out_text
+    return check
+
 
 ############################################ Fuzzy matching of names and addresses #####################################
-
 
 def jaro_address(address_str, thresh):
     import jaro

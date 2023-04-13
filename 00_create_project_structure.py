@@ -20,6 +20,7 @@ def main():
     os.chdir(WD)
 
     ## Create folders for entire project
+    helper_functions.create_folder("00_data")
     helper_functions.create_folder("01_clean_owner_strings")
     helper_functions.create_folder("02_identify_unique_owner_address_combinations")
     helper_functions.create_folder("03_owner_name_classification")
@@ -27,6 +28,7 @@ def main():
     helper_functions.create_folder("05_georeference_addresses")
     helper_functions.create_folder("06_prepare_dafne_search")
     helper_functions.create_folder("07_owner_name_cleaning")
+    helper_functions.create_folder("08_network_analysis")
 
     etime = time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime())
     print("start: " + stime)

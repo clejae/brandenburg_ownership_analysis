@@ -2,10 +2,8 @@
 # github Repo: https://github.com/clejae
 
 # ------------------------------------------ LOAD PACKAGES ---------------------------------------------------#
-import pandas as pd
 import os
 import time
-import math
 from collections import defaultdict
 import json
 from collections import Counter
@@ -892,7 +890,7 @@ def fuzzy_matching_alkis_data(alkis_path, matching_data, matched_owners_pth):
 
 
 def combine_owners_with_agricultural_information(alkis_pth_name, agri_information_subsidies, alkis_to_dafne_names,
-                                                 branch_information_dafne, alkis_pth_out):
+                                                 branch_information_dafne, alkis_pth_out, companies_with_branches_pth):
 
     """
     Adds the additional information whether owners are agricultural active and from which economic branches
@@ -1026,7 +1024,7 @@ def combine_owners_with_agricultural_information(alkis_pth_name, agri_informatio
 
     df_out = df_dafne[["search_name", "bvd_name", "bvd_id", 'WZ 2008 - Haupttätigkeit - Code', 'WZ 2008 - Nebentätigkeit - Code', "agric"]]
     df_out.columns = ["search_name", "bvd_name", "bvd_id", 'main_branch', 'side_branch', "agric"]
-    df_out.to_csv(r"07_owner_name_cleaning\companies_with_branches_and_agric.csv")
+    df_out.to_csv(companies_with_branches_pth)
 
     # comp_df = owner_df.loc[owner_df["level1"] == 2].copy()
     # comp_df.to_csv(r"C:\Users\IAMO\Documents\work_data\chapter1\ALKIS\09_network_analysis\temp_company_df.csv", index=False)
@@ -1325,7 +1323,8 @@ def main():
         agri_information_subsidies=AGRICULTURAL_OWNERS_PTH,
         branch_information_dafne=DAFNE_SEARCH_RESULTS_PTH,
         alkis_to_dafne_names=PTH_ALKIS_TO_DAFNE_NAMES,
-        alkis_pth_out=PTH_ALKIS_CLEAN
+        alkis_pth_out=PTH_ALKIS_CLEAN,
+        companies_with_branches_pth=r"07_owner_name_cleaning\companies_with_branches_and_agric.csv"
     )
 
     control_subsidy_recipients(
