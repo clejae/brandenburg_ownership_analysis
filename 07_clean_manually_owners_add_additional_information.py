@@ -1257,54 +1257,54 @@ def main():
     os.chdir(WD)
 
     #################################### Cleaning procedure ####################################
-    # create_aristrocracy_dict(
-    #     alkis_pth=ALKIS_PTH,
-    #     out_pth=r"07_owner_name_cleaning\cleaning_dict_aristrocracy.json"
-    # )
-    # ## Some manual adjustments
-    # manually_clean_owners(
-    #     alkis_pth=ALKIS_PTH,
-    #     manual_cleaning_pth=PTH_CLEANING_MANUAL,
-    #     alkis_clean_pth=PTH_ALKIS_CLEAN_PRELIMINARY
-    # )
-    # ## DAFNE company names
-    # clean_company_names(
-    #     alkis_clean_pth=PTH_ALKIS_CLEAN_PRELIMINARY,
-    #     alkis_to_dafne_names_pth=PTH_ALKIS_TO_DAFNE_NAMES
-    # )
-    # ## Manual adjustments for churches
-    # clean_churchs_nonprof_public_names(
-    #     alkis_pth_name=PTH_ALKIS_CLEAN_PRELIMINARY,
-    #     clean_table_name=PTH_CLEANING_CHURCHES
-    # )
-    # ## Manual adjustments for non-profit etc.
-    # clean_churchs_nonprof_public_names(
-    #     alkis_pth_name=PTH_ALKIS_CLEAN_PRELIMINARY,
-    #     clean_table_name=PTH_CLEANING_NONPROF
-    # )
-    # ## Manual adjustments for public
-    # clean_churchs_nonprof_public_names(
-    #     alkis_pth_name=PTH_ALKIS_CLEAN_PRELIMINARY,
-    #     clean_table_name=PTH_CLEANING_PUBLIC
-    # )
-    # ## Manual and automatic adjustments for private people
-    # clean_private_people(
-    #     alkis_pth_name=PTH_ALKIS_CLEAN_PRELIMINARY,
-    #     clean_dict_pth=PTH_CLEANING_PEOPLE,
-    #     clean_dict_pth_manual=PTH_CLEANING_PEOPLE_MANUAL
-    # )
-    # ## Manual adjustments for others
-    # clean_churchs_nonprof_public_names(
-    #     alkis_pth_name=PTH_ALKIS_CLEAN_PRELIMINARY,
-    #     clean_table_name=PTH_CLEANING_REST
-    # )
-    # ## Quick cleaning of GbRs
-    # clean_gbrs(alkis_pth_name=PTH_ALKIS_CLEAN_PRELIMINARY
-    #            )
-    # ## Creation of new unique identifier and unifying of addresses
-    # create_new_unique_identifier_and_unify_addresses(
-    #     alkis_pth_name=PTH_ALKIS_CLEAN_PRELIMINARY
-    # )
+    create_aristrocracy_dict(
+        alkis_pth=ALKIS_PTH,
+        out_pth=r"07_owner_name_cleaning\cleaning_dict_aristrocracy.json"
+    )
+    ## Some manual adjustments
+    manually_clean_owners(
+        alkis_pth=ALKIS_PTH,
+        manual_cleaning_pth=PTH_CLEANING_MANUAL,
+        alkis_clean_pth=PTH_ALKIS_CLEAN_PRELIMINARY
+    )
+    ## DAFNE company names
+    clean_company_names(
+        alkis_clean_pth=PTH_ALKIS_CLEAN_PRELIMINARY,
+        alkis_to_dafne_names_pth=PTH_ALKIS_TO_DAFNE_NAMES
+    )
+    ## Manual adjustments for churches
+    clean_churchs_nonprof_public_names(
+        alkis_pth_name=PTH_ALKIS_CLEAN_PRELIMINARY,
+        clean_table_name=PTH_CLEANING_CHURCHES
+    )
+    ## Manual adjustments for non-profit etc.
+    clean_churchs_nonprof_public_names(
+        alkis_pth_name=PTH_ALKIS_CLEAN_PRELIMINARY,
+        clean_table_name=PTH_CLEANING_NONPROF
+    )
+    ## Manual adjustments for public
+    clean_churchs_nonprof_public_names(
+        alkis_pth_name=PTH_ALKIS_CLEAN_PRELIMINARY,
+        clean_table_name=PTH_CLEANING_PUBLIC
+    )
+    ## Manual and automatic adjustments for private people
+    clean_private_people(
+        alkis_pth_name=PTH_ALKIS_CLEAN_PRELIMINARY,
+        clean_dict_pth=PTH_CLEANING_PEOPLE,
+        clean_dict_pth_manual=PTH_CLEANING_PEOPLE_MANUAL
+    )
+    ## Manual adjustments for others
+    clean_churchs_nonprof_public_names(
+        alkis_pth_name=PTH_ALKIS_CLEAN_PRELIMINARY,
+        clean_table_name=PTH_CLEANING_REST
+    )
+    ## Quick cleaning of GbRs
+    clean_gbrs(alkis_pth_name=PTH_ALKIS_CLEAN_PRELIMINARY
+               )
+    ## Creation of new unique identifier and unifying of addresses
+    create_new_unique_identifier_and_unify_addresses(
+        alkis_pth_name=PTH_ALKIS_CLEAN_PRELIMINARY
+    )
 
     #################################### Add supplementary information ####################################
 
@@ -1312,7 +1312,7 @@ def main():
     ## This part is only in here for documentation reasons. It was done in a very early stage of the project and
     ## includes some steps that could not be reconstructed.
     ## Written by Tilman Schmitz.
-    # # # helper_functions.print_red("!!!! You have to run 07_data_preparations_alkis_farmsubsidy.R before proceeding !!!!")
+    # # # helper_functions.print_red("!!!! You have to run 07_data_preparations_alkis_farmsubsidy.R in R before proceeding !!!!")
     # # #
     # # # fuzzy_matching_alkis_data(
     # # #     alkis_path=r"07_owner_name_cleaning\string_match_alkis_farmer_information\alkis_2020_unique_owner_clean.csv",
