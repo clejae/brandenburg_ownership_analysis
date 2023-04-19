@@ -2000,43 +2000,43 @@ def main():
     os.chdir(WD)
 
     #################################### Cleaning network data ####################################
-    company_information_to_long_data_frame(
-        dafne_search_results=DAFNE_PTH,
-        col_renaming_json_pth=COL_RENAMING,
-        network_data_long_df_pth=NETW_LONG_PTH
-    )
-
-    identify_possible_alkis_matches_for_manual_assignment(
-        dafne_search_results=DAFNE_PTH,
-        network_data_long_df_pth=NETW_LONG_PTH,
-        alkis_pth=ALKIS_PTH,
-        possible_matches_folder=POSSIBLE_MATCHES_FOLDER
-    )
-
-    clean_long_network_table(
-        network_data_long_df_pth=NETW_LONG_PTH,
-        corrected_dafne_alkis_matches_json=CORRECTED_MATCHES_PTH,
-        prepared_network_data_pth=NETW_PTH
-    )
-
-    network_connections_to_list_for_dafne_search(
-        prepared_network_data_pth=NETW_PTH,
-        dafne_search_results=DAFNE_PTH,
-        col_renaming_json_pth=COL_RENAMING,
-        dafne_search_list_second_round=DAFNE_SEARCH_PTH,
-        folder_second_search=FOLDER_DAFNE_SECOND_SEARCH
-    )
-
-    add_economic_branch_to_network_companies(
-        folder_second_search=FOLDER_DAFNE_SECOND_SEARCH,
-        df_companies_with_branches_and_locations_pth=fr"08_network_analysis\all_companies_branches_and_locations.csv"
-    )
-
-    #################################### Network analysis ####################################
-    network_analysis_advanced(
-        netw_pth=NETW_PTH,
-        out_pth=NETW_COMM_PTH
-    )
+    # company_information_to_long_data_frame(
+    #     dafne_search_results=DAFNE_PTH,
+    #     col_renaming_json_pth=COL_RENAMING,
+    #     network_data_long_df_pth=NETW_LONG_PTH
+    # )
+    #
+    # identify_possible_alkis_matches_for_manual_assignment(
+    #     dafne_search_results=DAFNE_PTH,
+    #     network_data_long_df_pth=NETW_LONG_PTH,
+    #     alkis_pth=ALKIS_PTH,
+    #     possible_matches_folder=POSSIBLE_MATCHES_FOLDER
+    # )
+    #
+    # clean_long_network_table(
+    #     network_data_long_df_pth=NETW_LONG_PTH,
+    #     corrected_dafne_alkis_matches_json=CORRECTED_MATCHES_PTH,
+    #     prepared_network_data_pth=NETW_PTH
+    # )
+    #
+    # network_connections_to_list_for_dafne_search(
+    #     prepared_network_data_pth=NETW_PTH,
+    #     dafne_search_results=DAFNE_PTH,
+    #     col_renaming_json_pth=COL_RENAMING,
+    #     dafne_search_list_second_round=DAFNE_SEARCH_PTH,
+    #     folder_second_search=FOLDER_DAFNE_SECOND_SEARCH
+    # )
+    #
+    # add_economic_branch_to_network_companies(
+    #     folder_second_search=FOLDER_DAFNE_SECOND_SEARCH,
+    #     df_companies_with_branches_and_locations_pth=fr"08_network_analysis\all_companies_branches_and_locations.csv"
+    # )
+    #
+    # #################################### Network analysis ####################################
+    # network_analysis_advanced(
+    #     netw_pth=NETW_PTH,
+    #     out_pth=NETW_COMM_PTH
+    # )
     ## Add the community IDs to ALKIS owners
     for threshold in [0, 25, 50]: # 10 could also be used.
 
@@ -2058,6 +2058,7 @@ def main():
             comp_comm_mcomp_dict_pth=COMP_COMMUNITY_MCOMP_DICT.format(threshold),
             comm_col=f"community_{threshold}",
             community_info_dict_pth=COMMUNITY_INFO_DICT.format(threshold),
+            max_dist_dict_pth=COMMUNITY_MAX_DIST_DICT_PTH.format(threshold),
             out_pth=OWNERS_STRETCHED_COMM.format(threshold)
         )
 
