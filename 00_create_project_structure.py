@@ -29,6 +29,9 @@ def main():
     helper_functions.create_folder("06_prepare_dafne_search")
     helper_functions.create_folder("07_owner_name_cleaning")
     helper_functions.create_folder("08_network_analysis")
+    helper_functions.create_folder("09_alkis_intersection_with_other_layers")
+    helper_functions.create_folder("10_owner_network_classification")
+    helper_functions.create_folder("11_ownership_concentration_calculation")
 
     etime = time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime())
     print("start: " + stime)

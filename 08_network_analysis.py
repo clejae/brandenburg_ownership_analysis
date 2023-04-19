@@ -9,10 +9,15 @@ import pandas as pd
 import os
 import json
 import glob
+import networkx as nx
+from community import community_louvain
+import matplotlib.pyplot as plt
+
+## Project library
+import helper_functions
+import plotting_lib
 
 # ------------------------------------------ USER INPUT ------------------------------------------------#
-import helper_functions
-
 WD = r"C:\Users\IAMO\Documents\work_data\ownership_paper"
 os.chdir(WD)
 
@@ -27,12 +32,13 @@ FOLDER_DAFNE_SECOND_SEARCH = r"08_network_analysis\second_search" #Will be creat
 COL_RENAMING = r"08_network_analysis\renaming_columns_first_dafne_search.json"
 NETW_LONG_PTH = r"08_network_analysis\network_connections_long.csv"
 NETW_PTH = r"08_network_analysis\network_connections.csv"
-UNINAMES_PTH = r"08_network_analysis\uni_names.csv"
 POSSIBLE_MATCHES_FOLDER = r"08_network_analysis"
 DAFNE_SEARCH_PTH = r"08_network_analysis\dafne_search_second_round.csv"
-
-
-# AGRI_COMP_EXT_PTH = r"07_owner_name_cleaning\matching_results_alkis_farmsubs_futtermittel_extension.csv"
+NETW_COMM_PTH = r"08_network_analysis\network_connections_with_community.csv"
+COMP_COMMUNITY_MCOMP_DICT = r"08_network_analysis\owners+communities_thr{0}\08_comp_comm_mcomp_thr{0}_dict.json"
+COMMUNITY_INFO_DICT = r"08_network_analysis\owners+communities_thr{0}\08_alkis_owners_comm_thr{0}_info_dict.json"
+OWNERS_STRETCHED_COMM = r"08_network_analysis\owners+communities_thr{0}\08_owners_stretched+comm_thr{0}.csv"
+COMMUNITY_MAX_DIST_DICT_PTH = r"08_network_analysis\community{0}_max_dist_dict.json"
 
 # ------------------------------------------ DEFINE FUNCTIONS ------------------------------------------------#
 
@@ -1164,45 +1170,948 @@ def add_economic_branch_to_network_companies(folder_second_search, df_companies_
     print("Done!")
 
 
+def identify_communities(df, thresh=None):
+
+    """
+
+    :param df: df or group of rows from df (from group_by) with left and right connections of a company network and
+    the columns "share" for the shares that the right connection holds on the left connections and "ismanager"
+    indicating wether right connection is the manager of left connection
+    :param thresh: Treshhold which shares to include (all greater and equal).
+    :return: df with connections.
+    """
+
+    if thresh:
+        ## exclude all connections that are below share but include managers
+        df1 = df.loc[df['share'] >= thresh].copy()
+        df2 = df.loc[(df["share"] < thresh) & (df["ismanager"] == 'yes')].copy()
+        df3 = df.loc[(df["share"] < thresh) & (df["function"] == 'Vorstand')].copy()
+        # df2 = df2.loc[(df2["share"] > 0)].copy()
+        df = pd.concat([df1, df2, df3], axis=0)
+        df.sort_index(inplace=True)
+
+    node_names = list(set(df["conn_left"].unique().tolist() + df["conn_right"].unique().tolist()))
+
+    ## create edges from df
+    edges = [(row.conn_left, row.conn_right) for row in df.itertuples()]
+
+    def get_communities(node_names, edges):
+
+        """
+        This function separates sub communities from several communites
+        :param node_names:
+        :param edges:
+        :return:
+        """
+
+        community_dict = {}
+
+        sub_comm = 0
+        for node_name in node_names:
+            if node_name in community_dict:
+                continue
+
+            ## put in list that will dynamically be appended
+            nnames = [node_name]
+
+            for nname in nnames:
+                ## look for all edges in which the current names occurs
+                edges_lst = [edge for edge in edges if nname in edge]
+                ## get all names that occur in the all these edges if they are nor already in nnames
+                nname_lst = [nname for edge in edges_lst for nname in edge if nname not in nnames]
+
+                ## append nnames with newly found names.
+                ## This will be done until no new name is added
+                nnames += nname_lst
+
+            ## assign a number to each name
+            for nname in nnames:
+                if nname not in community_dict:
+                    community_dict[nname] = sub_comm
+
+            sub_comm += 1
+
+        return community_dict
+
+    partition = get_communities(node_names, edges)
+
+    df[f"community_{thresh}"] = df["conn_left"].map(partition)
+    df[f"community_{thresh}"] = df[f"community_{thresh}"].astype(int).astype(str)
+
+    return df
+
+
+def network_analysis_advanced(netw_pth, out_pth):
+    """
+    Derive the communities/networks from the table with all companies, managers etc. and their connections.
+    :param netw_pth: Path to table with connections (conn_left, conn_right, shares)
+    :param out_pth: Output path.
+    :return:
+    """
+    print("Advanced network analysis.")
+
+    ## All this was found at https://programminghistorian.org/en/lessons/exploring-and-analyzing-network-data-with-python
+    os.chdir(WD)
+
+    ## load data
+    df = pd.read_csv(netw_pth)
+
+    print("\tNumber rows of original df:", len(df))
+
+    node_names = list(set(df["conn_left"].unique().tolist() + df["conn_right"].unique().tolist()))
+
+    ## create edges from df
+    edges = [(row.conn_left, row.conn_right) for row in df.itertuples()]
+
+    G = nx.Graph()
+    G.add_nodes_from(node_names)
+    G.add_edges_from(edges)
+
+    ## Add additional information
+    share_dict = {}
+
+    for row in df.itertuples():
+        share_dict[(row.conn_left, row.conn_right)] = row.share
+
+    nx.set_edge_attributes(G, share_dict, 'shares')
+
+    ## Calculate communities in whole Graph
+    partition = community_louvain.best_partition(G)
+    nx.set_node_attributes(G, partition, 'company_cluster')
+
+    # df["community_0"] = df["conn_left"].map(partition)
+    # df[f"community_0"] = df[f"community_0"].astype(int).astype(str)
+
+    df = identify_communities(df=df, thresh=0)
+
+    df.drop_duplicates(subset=["conn_left", "conn_right"], inplace=True)
+
+    print("\tUnify names of people within each community.")
+
+    def unify_names(comm_group):
+
+        people = comm_group.loc[comm_group["isperson"] == "Person"].copy()
+        people.drop_duplicates(subset="conn_right", inplace=True)
+
+        names = people["conn_right"].to_list()
+
+        names_wo_loc = [name for name in names if '_' not in name]
+        name_w_loc = [name for name in names if '_' in name]
+
+        cleaning_dict = {name_wo: name_w for name_wo in names_wo_loc for name_w in name_w_loc if name_wo in name_w}
+
+        comm_group.loc[comm_group["conn_right"].isin(cleaning_dict), "conn_right"] = comm_group.loc[
+            comm_group["conn_right"].isin(cleaning_dict), "conn_right"].map(cleaning_dict)
+
+        # if len(cleaning_dict) > 0:
+        #     print(cleaning_dict)
+
+        return comm_group
+
+    df = df.groupby("community_0").apply(unify_names).reset_index()
+    df.drop(columns=["index"], inplace=True)
+    df.drop_duplicates(subset=["conn_left", "conn_right", "share"], inplace=True)
+
+    print("\tNumber rows of df with communities, thresh=0:", len(df))
+
+    df50 = df.groupby("community_0").apply(identify_communities, 50).reset_index(drop=True)
+    print("\tNumber rows of df with communities, thresh=50:", len(df50))
+
+    df25 = df.groupby("community_0").apply(identify_communities, 25).reset_index(drop=True)
+    print("\tNumber rows of df with communities, thresh=25:", len(df25))
+
+    df10 = df.groupby("community_0").apply(identify_communities, 10).reset_index(drop=True)
+    print("\tNumber rows of df with communities, thresh=10:", len(df10))
+
+    df = pd.merge(df, df50[["conn_left", "conn_right", "community_50"]], how="left", on=["conn_left", "conn_right"])
+    df.loc[df["community_50"].isna(), "community_50"] = '99'
+    df[f"community_50"] = df[["community_0", f"community_50"]].agg('_'.join, axis=1)
+    df.loc[df["community_50"].str.count("_99") > 0, "community_50"] = None
+
+    df = pd.merge(df, df25[["conn_left", "conn_right", "community_25"]], how="left", on=["conn_left", "conn_right"])
+    df.loc[df["community_25"].isna(), "community_25"] = '99'
+    df[f"community_25"] = df[["community_0", f"community_25"]].agg('_'.join, axis=1)
+    df.loc[df["community_25"].str.count("_99") > 0, "community_25"] = None
+
+    df = pd.merge(df, df10[["conn_left", "conn_right", "community_10"]], how="left", on=["conn_left", "conn_right"])
+    df.loc[df["community_10"].isna(), "community_10"] = '99'
+    df[f"community_10"] = df[["community_0", f"community_10"]].agg('_'.join, axis=1)
+    df.loc[df["community_10"].str.count("_99") > 0, "community_10"] = None
+
+    print("\tNumber rows of df for output:", len(df))
+
+    print(f"\tWrite df to {out_pth}.")
+    df.to_csv(out_pth, sep=',', index=False)
+
+    # sub_nodes = set([key for key in partition if partition[key] == 0])
+    # subgraph = G.subgraph(sub_nodes)
+    #
+    # get_information_from_network(subgraph)
+    # time.sleep(1)
+    # draw_network(subgraph)
+
+
+def create_comp_community_mcomp_dictionary(net_comm_pth, comm_col, out_pth):
+    """
+    Create a company-community-mother company dictionary
+    Args:
+        net_comm_pth: Dataframe with network data and community numbers.
+        comm_col: Column name with community IDs.
+        out_pth: Output path for dictionary providing the mother companies and the community ids for each company.
+
+    Returns:
+
+    """
+    print(f"Create a company-community-mother company dictionary with column {comm_col}")
+    df_net = pd.read_csv(net_comm_pth, dtype={comm_col: str})
+    df_net = df_net.loc[df_net[comm_col].notna()].copy()
+
+    ## From left and right connections in network table create a table that assigns each network part to community
+    df_net1 = df_net[["conn_left", comm_col]].copy()
+    df_net2 = df_net[["conn_right", comm_col]].copy()
+    df_net2.rename(columns={"conn_right": "conn_left"}, inplace=True)
+    df_net_red = pd.concat([df_net1, df_net2], axis=0)
+    df_net_red.drop_duplicates(subset=["conn_left", comm_col], inplace=True)
+
+    ind = list(df_net_red.columns).index(comm_col) + 1
+    comp_comm_dict = {row.conn_left: row[ind] for row in df_net_red.itertuples()}
+
+    ## Find global owner per community number and save to dictionary
+    comm_ids = df_net[comm_col].unique()
+    comm_mcomp_dict = {}
+    for comm_id in comm_ids:
+        df_curr_net = df_net.loc[(df_net[comm_col] == comm_id)].copy()
+        df_sub = df_curr_net.loc[(df_curr_net["function"].isin(["mother company"]))].copy()
+        mother_companies = df_sub["conn_right"].unique()
+
+        ## If a mother company in a community doesn't occur in the left connection columm (all lefts are "inferior")
+        ## then it's likely the mother company of the whole community
+        for mcomp in mother_companies:
+            mcomp_clean = mcomp.replace(' ', '')
+            conn_lefts = df_sub["conn_left"].to_list()
+            conn_lefts = [item.replace(' ', '') for item in conn_lefts]
+            if mcomp_clean not in conn_lefts:
+                if comm_id in comm_mcomp_dict:
+                    comm_mcomp_dict[comm_id].append(mcomp)
+                    # print("ID:", comm_id, comm_mcomp_dict[comm_id])
+                else:
+                    comm_mcomp_dict[comm_id] = [mcomp]
+
+        ## If there is no mother company, then get all companies that are not labeled as subsidaries
+        ## from that list get companies/company with highest share and assign them/it as the mother company
+        if len(mother_companies) == 0:
+            df_sub = df_curr_net.loc[~df_curr_net["function"].isin(["subsidary"])].copy()
+            df_sub = df_sub.loc[df_sub["share"] == df_sub["share"].max()].copy()
+            if len(df_sub) == 1:
+                mcomp = df_sub["conn_right"].iloc[0]
+                comm_mcomp_dict[comm_id] = [mcomp]
+            elif len(df_sub) > 1:
+                mcomps = df_sub["conn_right"].tolist()
+                comm_mcomp_dict[comm_id] = mcomps
+            else:
+                mcomps = list(df_curr_net["conn_right"].unique())
+                comm_mcomp_dict[comm_id] = mcomps
+                # print("ID:", comm_id, comm_mcomp_dict[comm_id])
+
+    ## In a few cases there could not be identified a mother company
+    ## In this case take the first company that occurs on the right connection side
+    for comm_id in comm_ids:
+        if comm_id not in comm_mcomp_dict:
+            df_curr_net = df_net.loc[(df_net[comm_col] == comm_id)].copy()
+            df_sub = df_curr_net.loc[(df_curr_net["function"].isin(["mother company"]))].copy()
+            mother_companies = list(df_sub["conn_right"].unique())
+            comm_mcomp_dict[comm_id] = mother_companies
+            if len(mother_companies) > 1:
+                comm_mcomp_dict[comm_id] = [mother_companies[0]]
+                # print(comm_id, mother_companies)
+
+    ## As in some cases there are multiple mother companies, they need to be transformed into a string
+    for i in comm_mcomp_dict:
+        comm_mcomp_dict[i] = ' AND '.join(list(set(comm_mcomp_dict[i])))
+
+    out_dict = {"company_to_community": comp_comm_dict,
+                "community_to_mother_company": comm_mcomp_dict}
+
+    out_folder = os.path.dirname(out_pth)
+    helper_functions.create_folder(out_folder)
+
+    with open(out_pth, 'w') as fp:
+        json.dump(out_dict, fp, indent=4)
+
+
+def get_maximum_hierarchical_distance_in_network(net_comm_pth, comm_col, out_pth):
+    """
+    Derives the number of hierarchical levels per community.
+    Args:
+        net_comm_pth: Dataframe with network data and community numbers.
+        comm_col: Column name with community IDs.
+        out_pth: Output path to dictionary (json) with no. of hierarchical levels per community.
+
+    Returns:
+
+    """
+
+    df_net = pd.read_csv(net_comm_pth, dtype={comm_col: str})
+    df_net = df_net.loc[df_net[comm_col].notna()].copy()
+
+    max_dist_dict = {}
+    for comm in list(df_net[comm_col].unique()):
+        df_sub = df_net.loc[df_net[comm_col] == comm].copy()
+        df_sub.drop_duplicates(subset="conn_right", inplace=True)
+        conn_rights = df_sub["conn_right"].tolist()
+        conn_lefts = list(set(df_sub["conn_left"].tolist()))
+        max_dist = 1
+        for cl in conn_lefts:
+            if cl in conn_rights:
+                max_dist += 1
+        max_dist_dict[comm] = max_dist
+
+    with open(out_pth, 'w') as fp:
+        json.dump(max_dist_dict, fp, indent=4)
+
+
+
+
+def add_community_number_to_alkis_data(alkis_pth, comp_comm_mcomp_dict_pth, comm_col, out_pth,
+                                       community_info_dict_pth, max_dist_dict_pth):
+    """
+    Adds the community ID to the ALKIS data, creates a dictionary with the information on subcompanies,
+    number of subcompanies per community.
+    Args:
+        alkis_pth: Path to owner data frame.
+        comp_comm_mcomp_dict_pth: Path to dictionary with company to community ID/mother company.
+        comm_col: Column with community ID
+        out_pth: Output path to ALKIS data frame with community information.
+        community_info_dict_pth: Output path to dictionary with information on the communities.
+        max_dist_dict_pth: Path to dictionary with no. of hierarchical levels per community.
+
+    Returns:
+
+    """
+    print(f"Add community number to ALKIS data with column {comm_col}.")
+
+    os.chdir(WD)
+
+    ## Open data
+    print("\tRead data.")
+    df_alk = pd.read_csv(alkis_pth, sep=';')
+
+    print("\tLength of table:", len(df_alk))
+
+    with open(comp_comm_mcomp_dict_pth) as json_file:
+        comp_comm_mcomp_dict = json.load(json_file)
+
+    with open(max_dist_dict_pth) as json_file:
+        max_dist_dict = json.load(json_file)
+
+    comm_dict = comp_comm_mcomp_dict["community_to_mother_company"]
+    comp_comm_dict = comp_comm_mcomp_dict["company_to_community"]
+    df_comp_comm = pd.DataFrame.from_dict(comp_comm_dict, orient='index').reset_index()
+    df_comp_comm.columns = ["conn_left", comm_col]
+
+    ###############################################################
+    ## Add mother company names and community numbers to ALKIS data
+    ###############################################################
+
+    ## Clean owner name in ALKIS data
+    cols = ["owner_clean"]
+    for col in cols:
+        df_alk[col] = df_alk[col].str.lower()
+        df_alk[col] = df_alk[col].str.replace("ä", "ae")
+        df_alk[col] = df_alk[col].str.replace("ö", "oe")
+        df_alk[col] = df_alk[col].str.replace("ü", "ue")
+        df_alk[col] = df_alk[col].str.replace("ß", "ss")
+
+    df_alk["conn_left"] = df_alk["owner_clean"]
+
+    ## For private owner create merge name with pattern: "surname familyname_location" to merge with dafne entries
+    df_alk.loc[(df_alk["level3"] == "1_1_1") & (df_alk["conn_left"].str.count(',') > 0), "conn_left"] = \
+        df_alk.loc[(df_alk["level3"] == "1_1_1") & (df_alk["conn_left"].str.count(',') > 0), "conn_left"].apply(
+            lambda row: row.split(',')[1] + ' ' + row.split(',')[0])
+
+    df_alk["city"] = df_alk["clean_address"].apply(helper_functions.identify_city)
+    df_alk.loc[(df_alk["level3"] == '1_1_1') &
+               (df_alk["owner_clean"].str.count(',') > 0), "conn_left"] = df_alk.loc[(df_alk["level1"] == 1) &
+               (df_alk["owner_clean"].str.count(',') > 0), "conn_left"] + '_' + df_alk.loc[(df_alk["level1"] == 1) &
+               (df_alk["owner_clean"].str.count(',') > 0), "city"]
+
+    df_alk["conn_left"] = df_alk["conn_left"].str.lstrip(' ')
+    df_alk["conn_left"] = df_alk["conn_left"].str.rstrip(' ')
+
+    ## Get a list of all DAFNE entries that are aristrocracy
+    t = df_comp_comm.loc[
+        df_comp_comm["conn_left"].str.contains(" von ") | df_comp_comm["conn_left"].str.contains(" van ")].copy()
+    t = t.loc[t["conn_left"].str.contains("_")].copy()
+    search_list = list(t["conn_left"].unique())
+
+    ## create a reduced version of ALKIS for faster processing
+    df_red = df_alk.drop_duplicates(subset="conn_left")
+    df_red = df_red.loc[df_red["level3"] == '1_1_1'].copy()
+
+    ## write a function that looks if the first name and the first part of the family name are in another string
+    def func(x, search_lst):
+        out = [item if ((item.split(" ")[0] in x) & (item.split("_")[0].split(' ')[-1] in x)) else False for item in search_lst]
+        out = [item for item in out if item != False]
+        if len(out) > 0:
+            out = out[0]
+        else:
+            out = None
+        return out
+
+    ## Option 1 to check if any entry in ALKIS contains first name and first part of family name of any of the identified
+    ## aristrocratic persons
+    # df_red["select"] = df_red["owner_clean"].apply(lambda x: 1 if any((item.split(" ")[0] in x) & (item.split("_")[0].split(' ')[-1] in x) for item in search_list) else 0)
+    # df_red2 = df_red.loc[df_red["select"] == 1].copy()
+
+    ## Option 2 to do the same but more efficient (could even be improved)
+    df_red["search_term"] = [func(x, search_list) for x in df_red["owner_clean"].values]
+    df_red2 = df_red.loc[df_red["search_term"] != None].copy()
+    df_red2 = df_red2[["owner_names", "owner_clean", "clean_address", "city", "conn_left", "search_term"]].copy()
+    df_red2 = df_red2.loc[df_red2["search_term"].isin(search_list)].copy()
+    df_red2.to_csv(r"08_network_analysis\dafne_cleaning_dict_aristrocracy.csv", sep=";", index=False)
+
+    ##
+    pth = r"08_network_analysis\dafne_cleaning_dict_aristrocracy_edited.csv"
+    if not os.path.exists(pth):
+        helper_functions.print_red("\tYou have to clean the identified aristrocacy entries manually and save them as dafne_cleaning_dict_aristrocracy_edited.csv!")
+        exit()
+    else:
+        df_clean = pd.read_csv(pth, sep=";")
+        clean_dict = {row.search_term: row.conn_left for row in df_clean.itertuples()}
+
+        df_comp_comm.loc[df_comp_comm["conn_left"].isin(clean_dict.keys()), "conn_left"] = df_comp_comm.loc[
+            df_comp_comm["conn_left"].isin(clean_dict.keys()), "conn_left"].map(clean_dict)
+
+
+    ## Option 3, very slow
+    # for owner_name in list(t["conn_left"].unique()):
+    #     #     first_term = owner_name.split(" ")[0]
+    #     #     second_term = owner_name.split("_")[0].split(' ')[-1]
+    #     #     t2 = df_red.loc[
+    #     #         df_red["owner_clean"].str.contains(first_term, regex=False) & df_red["owner_clean"].str.contains(second_term, regex=False)].copy()
+    #     #     t3 = df_red.loc[df_red["owner_clean"].str.contains(f"(?=.*{second_term})(?=.*{first_term})", regex=True)]
+    #     #     if not t2.empty:
+    #     #         print("Test")
+    #     #         print(f"{owner_name};{list(t2['conn_left'])};{list(t2['owner_clean'])};{list(t2['clean_address'])}")
+
+    ## remove double entries from df_comp_comm
+    print("\tDAFNE entries before dropping duplicates:", len(df_comp_comm))
+    df_comp_comm.drop_duplicates(subset=["conn_left", comm_col], inplace=True)
+    print("\tDAFNE entries after dropping duplicates:", len(df_comp_comm))
+
+    ## Get all network connections that are in several communities
+    ## This happens due to different writings prior to this script and its cleaning
+    from collections import Counter
+    counts = Counter(df_comp_comm["conn_left"])
+    counts = [key for key in counts if counts[key] > 1]
+
+    ## I assume that these connections actually build a bridge between the different communities they are in
+    ## Thus I correct the community
+    for val in counts:
+        comms = df_comp_comm.loc[df_comp_comm["conn_left"] == val, comm_col].tolist()
+        comm1 = comms[0]
+        comms.remove(comm1)
+        df_comp_comm.loc[df_comp_comm[comm_col].isin(comms), comm_col] = comm1
+        ## The dictionary created in create_comp_community_mcomp_dictionary() is only
+        ## used prior to this and does not need any correction
+        ## ToDo clean aristrocratic DAFNE entries before network analysis (08_2_network_analysis.py)
+        ## repeat all this afterwards.
+
+    print("\tDAFNE entries before dropping duplicates:", len(df_comp_comm))
+    df_comp_comm.drop_duplicates(subset=["conn_left", comm_col], inplace=True)
+    print("\tDAFNE entries after dropping duplicates:", len(df_comp_comm))
+
+
+    ## Merge ALKIS and DAFNE
+    df_alk = pd.merge(df_alk, df_comp_comm, how="left", on="conn_left")
+    print("\tLength of table after merging with DAFNE:", len(df_alk))
+
+    ## Check for completeness
+    # t = df_alk.loc[df_alk[comm_col].notna()].copy()
+    # t2 = t.loc[t["conn_left"].str.count('_') > 0].copy()
+    # t31 = df_alk.loc[df_alk[comm_col].isna()].copy()
+    # t3 = t31.loc[t31["conn_left"].str.count('_') == 0].copy()
+    # t3 = t3.loc[t3["level1"] == 2].copy()
+
+    ## It is possible that two different owners with same family name and address were assigned to different communities
+    ## In this case take the community with more parcels and assign it to the other
+    df_comms = df_alk.loc[df_alk[comm_col].notna()].copy()
+    df_comms.drop_duplicates(subset=['owner_merge', comm_col], inplace=True)
+    print("\t1. Leschke has comm:", 'leschkeberlinerstr5604916herzberg' in df_comms["owner_merge"].tolist())
+
+    print("\tNumber of unique owner_merge community combinations before cleaning:", len(df_comms))
+    multi_count = Counter(df_comms["owner_merge"])
+    multis = [key for key in multi_count if multi_count[key] > 1]
+    df_comms_multis = df_alk.loc[df_alk["owner_merge"].isin(multis)].copy()
+    print("\tNumber of owner_merge names that were assigned to different communities:", len(multis))
+    print("\t2. Leschke has comm:", 'leschkeberlinerstr5604916herzberg' in df_comms["owner_merge"].tolist())
+    print(df_alk.loc[df_alk["owner_merge"] == 'leschkeberlinerstr5604916herzberg', comm_col].unique())
+
+    def get_community_with_most_occurences(name_group):
+
+        counts = Counter(name_group[comm_col])
+        max_key = max(counts, key=counts.get)
+
+        return max_key
+
+    om_to_comm = df_comms_multis[["owner_merge", comm_col]].groupby("owner_merge").apply(
+        get_community_with_most_occurences).reset_index()
+    om_to_comm.columns = ["owner_merge", comm_col]
+    ind = list(om_to_comm.columns).index(comm_col) + 1
+    om_to_comm_dict_multis = {row.owner_merge: row[ind] for row in om_to_comm.itertuples()}
+    df_alk.loc[df_alk["owner_merge"].isin(multis), comm_col] = df_alk.loc[
+        df_alk["owner_merge"].isin(multis), "owner_merge"].map(om_to_comm_dict_multis)
+    print("\t", df_alk.loc[df_alk["owner_merge"] == 'leschkeberlinerstr5604916herzberg', comm_col].unique())
+
+    print("\tNumber of unique owner_merge community combinations after cleaning:", len(df_alk.loc[df_alk[comm_col].notna()].drop_duplicates(subset=['owner_merge', comm_col])))
+    print("\tLength of table after cleaning step 1:", len(df_alk))
+
+    ## It is possible that from different owners with same family name and address, one was assigned
+    ## to a community and the other(s) not. Assign the community to the others
+    ## e.g. in case of networks WITH threshold:
+    ## andreas ebel_beindersheim is in same community as rinderzucht lanz - lenzen ag,
+    ## matthias ebel_beindersheim lives in same address as andreas (i.e. he is family) BUT is not part of the community
+    ## He should be assigned to the same community and assigned to the same company
+    ## owner_merge == ebelsiemensstr867259beindersheim
+
+    df_comms = df_alk.loc[df_alk[comm_col].notna()].copy()
+    print("\t3. Leschke has comm:", 'leschkeberlinerstr5604916herzberg' in df_comms["owner_merge"].tolist())
+    df_comms.drop_duplicates(subset=['owner_merge', comm_col], inplace=True)
+    print("\t4. Leschke has comm:", 'leschkeberlinerstr5604916herzberg' in df_comms["owner_merge"].tolist())
+
+
+    print("\tNumber of unique communities in alkis data:", len(df_comms))
+    ind = list(df_comms.columns).index(comm_col) + 1
+    om_to_comm_dict = {row.owner_merge: row[ind] for row in df_comms.itertuples()}
+    oms = [key for key in om_to_comm_dict]
+    print("\tNumber of owner_merge names with a community number:", len(oms))
+    print("\tLength of ALKIS data with a community number before correction:",
+          len(df_alk.loc[df_alk[comm_col].notna()]))
+    df_alk.loc[df_alk["owner_merge"].isin(oms), comm_col] = df_alk.loc[
+        df_alk["owner_merge"].isin(oms), "owner_merge"].map(om_to_comm_dict)
+    print("\tLength of ALKIS data with a community number after correction:",
+          len(df_alk.loc[df_alk[comm_col].notna()]))
+    print("Length of table after cleaning step 2:", len(df_alk))
+
+    ## Set owner clean merge as mother company name, but for cases that already have a community number
+    ## use the mother company name from the network data
+    print("\tAssign mother company name to all community numbers")
+    df_alk["mother_company"] = df_alk["owner_merge"]
+    df_alk.loc[df_alk[comm_col].notna(), "mother_company"] = df_alk.loc[
+        df_alk[comm_col].notna(), comm_col].map(comm_dict)
+    print("\tLength of ALKIS data with a mother company name after assignment:",
+          len(df_alk.loc[df_alk["mother_company"].notna()]))
+
+    ## For all owner that dont belong to a community assign a community number
+    print("\tAssign community number to all owners without a number yet.")
+    no_comm = list(df_alk.loc[df_alk[comm_col].isna(), "owner_merge"].unique())
+    no_comm_to_comm_dict = {name: i + 9999 for i, name in enumerate(no_comm)}
+    df_alk.loc[df_alk[comm_col].isna(), comm_col] = df_alk.loc[df_alk[comm_col].isna(), "owner_merge"].map(no_comm_to_comm_dict)
+    print("\tLength of ALKIS data with a community number after assignment:",
+           len(df_alk.loc[df_alk[comm_col].notna()]))
+    print("\tLength of table after cleaning step 3:", len(df_alk))
+
+    ## get all cases that have the same owner merge name but different mother company names
+    ## Create a combined mother company name
+    ## Assign combined mother company name to the identified cases
+    df_uni_om = df_alk.drop_duplicates(subset=["owner_merge", "mother_company"])
+    multi_count = Counter(df_uni_om["owner_merge"])
+    multis = [key for key in multi_count if multi_count[key] > 1]
+    df_uni_om = df_uni_om.loc[df_uni_om["owner_merge"].isin(multis)].copy()
+
+    if not df_uni_om.empty:
+
+        def create_combined_mcomp_name(name_group):
+
+            uni_names = list(name_group["mother_company"].unique())
+            mcomp = ' AND '.join(uni_names)
+
+            return mcomp
+
+        om_to_mcomp = df_uni_om[["owner_merge", "mother_company"]].groupby("owner_merge").apply(create_combined_mcomp_name).reset_index()
+        om_to_mcomp.columns = ["owner_merge", "mother_company"]
+
+        om_to_mcomp_dict = {row.owner_merge: row.mother_company for row in om_to_mcomp.itertuples()}
+
+        df_alk.loc[df_alk["owner_merge"].isin(multis), "mother_company"] = df_alk.loc[
+                df_alk["owner_merge"].isin(multis), "owner_merge"].map(om_to_mcomp_dict)
+
+    print("\tLength of table after cleaning step 4:", len(df_alk))
+
+    ## identify the cases where different owners with the same owner merge were assigned to different communities
+    ## they did not meet the criteria for belonging to the same comm.
+    ## But in the process above they were assigned the same mother company, so we need to assign the to the same community
+    df_uni_om = df_alk.drop_duplicates(subset=["owner_merge", comm_col])
+    multi_count = Counter(df_uni_om["owner_merge"])
+    multis = [key for key in multi_count if multi_count[key] > 1]
+
+    df_uni_om = df_uni_om.loc[df_uni_om["owner_merge"].isin(multis)].copy()
+
+    if not df_uni_om.empty:
+        helper_functions.print_red("\tWARNING there are cases where two different owner from the same onwer_merge were assigned to different communities")
+
+    ## Create a dictionary that holds for each community number the mother company name
+    df_comms_fin = df_alk.drop_duplicates(subset=[comm_col, "mother_company"])
+
+    if len(df_comms_fin[comm_col].unique()) > len(df_comms_fin["mother_company"].unique()):
+        helper_functions.print_red("\nWARNING: There are more communities than mother companies\n")
+
+        print("\tNumber of communities:", len(df_comms_fin[comm_col].unique()))
+        print("\tNumber of mother companies:", len(df_comms_fin["mother_company"].unique()))
+
+        multi_communities = Counter(df_comms_fin[comm_col])
+        multi_communities = {comm: multi_communities[comm] for comm in multi_communities if multi_communities[comm] > 1}
+        len(multi_communities)
+
+        multi_mcomps = Counter(df_comms_fin["mother_company"])
+        multi_mcomps = {mcomp: multi_mcomps[mcomp] for mcomp in multi_mcomps if multi_mcomps[mcomp] > 1}
+        len(multi_mcomps)
+
+    print("\tWrite ALKIS dataframe out.")
+    alk_to_comm = df_alk.drop_duplicates(subset=["owner_merge", comm_col])
+    alk_to_comm = alk_to_comm.set_index('owner_merge').to_dict()[comm_col]
+
+    ## Add no. of hierachical levels to ALKIS data
+    df_alk["netw_max_dist"] = df_alk[comm_col].map(max_dist_dict)
+    df_alk.loc[df_alk["netw_max_dist"].isna(), "netw_max_dist"] = 0
+
+    print("\tLength of table at writing out:", len(df_alk))
+    df_alk.to_csv(out_pth, sep=';', index=False)
+    print("\tWriting done.")
+
+    print("\tCreate an information dictionary holding the names and the numbers of all sub companies/owners for each community")
+    df_comms = df_alk.drop_duplicates(subset=[comm_col, "conn_left", "owner_merge", "mother_company"])
+    print(len(df_comms["conn_left"]), len(df_comms))
+    ## Get number of subcompanies per community
+    comms_with_multi_subs = Counter(df_comms[comm_col])
+    num_subcomps_dict = {comm: comms_with_multi_subs[comm] for comm in comms_with_multi_subs} #if comms_with_multi_subs[comm] > 1
+
+    ## Print all communities with more than x (e.g. 10) subcompanies that occur in ALKIS
+    # n = {comm: comms_with_multi_subs[comm] for comm in comms_with_multi_subs if comms_with_multi_subs[comm] > 10}
+    # if len(n) > 0:
+    #     print("Community")
+    #     for comm in n:
+    #         print("\t", comm, df_comms.loc[df_comms[comm_col] == comm, "owner_merge"].tolist())
+
+    comm_dict_df = df_comms.loc[df_comms[comm_col].isin(num_subcomps_dict.keys())].copy()
+    ind = list(comm_dict_df.columns).index(comm_col) + 1
+    comm_dict = {row[ind]: row.mother_company for row in comm_dict_df.itertuples()}
+
+    print("\tCreate subdictionary with names of subcompanies per community")
+    comm_ids = list(comm_dict.keys())
+    df_comm_ids = df_comms.loc[df_comms[comm_col].isin(comm_ids)]
+    def get_names_of_subcomps(comm_group, name_col):
+        names = list(comm_group[name_col].unique())
+        names = '\n'.join(names)
+        return names
+
+    df_names_sc = df_comm_ids.groupby(comm_col).apply(get_names_of_subcomps, name_col="conn_left").reset_index()
+    df_names_sc.columns = [comm_col, "names"]
+    ind = list(df_names_sc.columns).index(comm_col) + 1
+    name_subcomps_dict = {row[ind]: row.names for row in df_names_sc.itertuples()}
+
+    print("\tCreate output dictionary including number and names per community")
+    comm_dict = {str(key): comm_dict[key] for key in comm_dict}
+    num_subcomps_dict = {str(key): num_subcomps_dict[key] for key in num_subcomps_dict}
+    name_subcomps_dict = {str(key): name_subcomps_dict[key] for key in name_subcomps_dict}
+
+    comm_info_dict = {"comm_dict": comm_dict,
+                      "num_subcomps_dict": num_subcomps_dict,
+                      "name_subcomps_dict": name_subcomps_dict}
+
+    print("\tWrite json out")
+    with open(community_info_dict_pth, 'w') as fp:
+        json.dump(comm_info_dict, fp, indent=4)
+
+    print("\tDone!")
+
+
+def plot_network_graph_of_community_from_df(df, community_column, community_id, out_pth):
+    """
+    Plots the network graph for a community.
+    Args:
+        df: Network dataframe with companies and community IDs.
+        community_column: Column name for community IDs.
+        community_id: ID of community for which the plot should be generated.
+        out_pth: Output path for figure.
+
+    Returns:
+
+    """
+    df = df.loc[df[community_column] == community_id].copy()
+
+    function_to_value = {"Aktionär": 1,
+                         "Aufsichtsrat": 2,
+                         "Geschäftsführender Direktor": 3,
+                         "Geschäftsführer": 4,
+                         "Gesellschafter": 5,
+                         "Kommanditaktionär": 6,
+                         "Kommanditist": 7,
+                         "Komplementär": 8,
+                         "Liquidator": 9,
+                         "mother company": 10,
+                         "persönlich haftender Gesellschafter": 11,
+                         "Prokurist": 12,
+                         "subsidary": 13,
+                         "Verwaltungsrat": 14,
+                         "Vorstand": 15}
+
+    function_to_color = {"Aktionär": "#ffeda0", #gelb
+                         "Aufsichtsrat": "#bdbdbd", #grau
+                         "Geschäftsführender Direktor": "#a1d99b", #grün
+                         "Geschäftsführer": "#a1d99b", #grün
+                         "Gesellschafter": "#feb24c", #orange
+                         "Kommanditaktionär": "#ffeda0", #gelb
+                         "Kommanditist": "#feb24c", #orange
+                         "Komplementär": "#feb24c", #orange
+                         "Liquidator": "#bdbdbd", #grau
+                         "mother company": "#f03b20", #darkorange
+                         "persönlich haftender Gesellschafter": "#feb24c", #orange
+                         "Prokurist": "#bdbdbd", #grau
+                         "subsidary": "#f03b20", #darkorange
+                         "Verwaltungsrat": "#bdbdbd", #grau
+                         "Vorstand": "#bdbdbd"} #grau
+
+    # df["value"] = pd.Categorical(df[color_column])
+    # df['value'].cat.codes
+    df["value"] = df["function"].map(function_to_value)
+    df["color"] = df["function"].map(function_to_color)
+    df.rename(columns={"share": "weight"}, inplace=True)
+
+    df_len = len(df)
+
+    # Build your graph
+    G = nx.from_pandas_edgelist(df, 'conn_left', 'conn_right', ["weight", "function", "value", "color"])
+
+    # # Custom the nodes:
+    # fig, ax = plt.subplots()
+    # nx.draw(G, ax=ax, with_labels=True, node_color='skyblue', node_size=250, edge_color=df['value'].cat.codes,
+    #         width=3.0, edge_cmap=plt.cm.Set2, arrows=True, pos=nx.fruchterman_reingold_layout(G), font_size=8)
+    # ax.set_xlim([1.32 * x for x in ax.get_xlim()])
+    # ax.set_ylim([1.32 * y for y in ax.get_ylim()])
+    # plt.legend()
+    # # plt.margins(x=0.4)
+    # # fig.tight_layout()
+    # fig.savefig(out_pth)
+    # plt.close()
+
+    side_len = 11.5 * math.exp(0.0050 * df_len)
+
+    fig, ax = plt.subplots(figsize=plotting_lib.cm2inch(side_len, side_len))
+
+    edges = [(u, v) for (u, v, d) in G.edges(data=True)]
+    colors = [d["color"] for (u, v, d) in G.edges(data=True)]
+    # elarge = [(u, v) for (u, v, d) in G.edges(data=True) if d["weight"] >= 50]
+    # emedium = [(u, v) for (u, v, d) in G.edges(data=True) if 25 <= d["weight"] < 50]
+    # esmall = [(u, v) for (u, v, d) in G.edges(data=True) if d["weight"] < 25]
+
+    pos = nx.spring_layout(G, seed=1, k=1, iterations=2)
+    nx.draw_networkx_nodes(G, pos, ax=ax, node_size=250, node_color="#e6550d")
+    nx.draw_networkx_edges(G, pos, ax=ax, edgelist=edges, edge_color=colors, width=2, arrows=True)
+    # nx.draw_networkx_edges(
+    #     G, pos, ax=ax, edgelist=elarge, edge_color="#f03b20", width=2, arrows=True)
+    # nx.draw_networkx_edges(
+    #     G, pos, ax=ax, edgelist=emedium, edge_color="#feb24c", width=2, arrows=True)
+    # nx.draw_networkx_edges(
+    #     G, pos, ax=ax, edgelist=esmall, edge_color="#ffeda0", width=2, arrows=True)
+    nx.draw_networkx_labels(G, pos, ax=ax, font_size=8, font_family="sans-serif") # node labels
+    edge_labels = nx.get_edge_attributes(G, "weight") # edge weight labels
+    nx.draw_networkx_edge_labels(G, pos, edge_labels, ax=ax, font_size=8)
+
+    ax = plt.gca()
+    ax.margins(0.08)
+    plt.axis("off")
+    plt.tight_layout()
+    # plt.legend()
+    # plt.show()
+    out_pth = out_pth.replace('"', '')
+    plt.savefig(out_pth)
+
+
+def get_community_id_of_company(df, name, comm_column):
+    """
+    Provides the community ID for a company name.
+    Args:
+        df: Network dataframe with companies and community IDs
+        name: Company name.
+        comm_column: Column name for community IDs.
+
+    Returns:
+
+    """
+
+    if name in df["conn_left"].tolist():
+        comms = df.loc[df["conn_left"] == name, comm_column].to_list()
+        return comms
+    elif name in df["conn_right"].tolist():
+        comms = df.loc[df["conn_right"] == name, comm_column].to_list()
+        return comms
+    else:
+        print(f"{name} not found in df.")
+
+
+def get_common_owners(net_comm_pth, out_pth):
+    """
+    Get global ultimate owners/investors that invest in multiple communities but are below the threshold
+    Args:
+        net_comm_pth: Network dataframe with companies and community IDs
+        out_pth: Output path to dataframe.
+
+    Returns:
+
+    """
+
+    df_netw = pd.read_csv(net_comm_pth)
+
+    df1 = df_netw[["conn_left", "community_0", "community_50", "community_25"]]
+    df1.columns = ["conn", "community_0", "community_50", "community_25"]
+    df2 = df_netw[["conn_right", "community_0", "community_50", "community_25"]]
+    df2.columns = ["conn", "community_0", "community_50", "community_25"]
+
+    df = pd.concat([df1, df2], axis=0)
+
+    def count_unique_values_in_colum(group, column_name):
+
+        unique_communities = list(group[column_name].unique())
+        unique_communities = [comm for comm in unique_communities if comm[-3:] != '_99']
+        count = len(unique_communities)
+        return count
+
+    def return_unique_values_of_column(group, column_name):
+        values = list(group[column_name].unique())
+        values = [str(val) for val in values]
+        values = [val for val in values if val[-3:] != '_99']
+        values = '|'.join(values)
+        return values
+
+    df_count = df.groupby("conn").apply(count_unique_values_in_colum, "community_50").reset_index()
+    df_count.columns = ["name", "count_of_communities"]
+    df_values = df.groupby("conn").apply(return_unique_values_of_column, "community_50").reset_index()
+    df_values.columns = ["name", "communites"]
+
+    df_out = pd.merge(df_count, df_values, on="name", how="left")
+    df_out.sort_values(by="count_of_communities", ascending=False, inplace=True)
+    df_out.to_csv(out_pth)
+
+
 def main():
     stime = time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime())
     print("start: " + stime)
     os.chdir(WD)
 
     #################################### Cleaning network data ####################################
-    # company_information_to_long_data_frame(
-    #     dafne_search_results=DAFNE_PTH,
-    #     col_renaming_json_pth=COL_RENAMING,
-    #     network_data_long_df_pth=NETW_LONG_PTH
-    # )
-    #
-    # identify_possible_alkis_matches_for_manual_assignment(
-    #     dafne_search_results=DAFNE_PTH,
-    #     network_data_long_df_pth=NETW_LONG_PTH,
-    #     alkis_pth=ALKIS_PTH,
-    #     possible_matches_folder=POSSIBLE_MATCHES_FOLDER
-    # )
-    #
-    # clean_long_network_table(
-    #     network_data_long_df_pth=NETW_LONG_PTH,
-    #     corrected_dafne_alkis_matches_json=CORRECTED_MATCHES_PTH,
-    #     prepared_network_data_pth=NETW_PTH
-    # )
-    #
-    # network_connections_to_list_for_dafne_search(
-    #     prepared_network_data_pth=NETW_PTH,
-    #     dafne_search_results=DAFNE_PTH,
-    #     col_renaming_json_pth=COL_RENAMING,
-    #     dafne_search_list_second_round=DAFNE_SEARCH_PTH,
-    #     folder_second_search=FOLDER_DAFNE_SECOND_SEARCH
-    # )
-    #
-    # add_economic_branch_to_network_companies(
-    #     folder_second_search=FOLDER_DAFNE_SECOND_SEARCH,
-    #     df_companies_with_branches_and_locations_pth=fr"08_network_analysis\all_companies_branches_and_locations.csv"
-    # )
+    company_information_to_long_data_frame(
+        dafne_search_results=DAFNE_PTH,
+        col_renaming_json_pth=COL_RENAMING,
+        network_data_long_df_pth=NETW_LONG_PTH
+    )
+
+    identify_possible_alkis_matches_for_manual_assignment(
+        dafne_search_results=DAFNE_PTH,
+        network_data_long_df_pth=NETW_LONG_PTH,
+        alkis_pth=ALKIS_PTH,
+        possible_matches_folder=POSSIBLE_MATCHES_FOLDER
+    )
+
+    clean_long_network_table(
+        network_data_long_df_pth=NETW_LONG_PTH,
+        corrected_dafne_alkis_matches_json=CORRECTED_MATCHES_PTH,
+        prepared_network_data_pth=NETW_PTH
+    )
+
+    network_connections_to_list_for_dafne_search(
+        prepared_network_data_pth=NETW_PTH,
+        dafne_search_results=DAFNE_PTH,
+        col_renaming_json_pth=COL_RENAMING,
+        dafne_search_list_second_round=DAFNE_SEARCH_PTH,
+        folder_second_search=FOLDER_DAFNE_SECOND_SEARCH
+    )
+
+    add_economic_branch_to_network_companies(
+        folder_second_search=FOLDER_DAFNE_SECOND_SEARCH,
+        df_companies_with_branches_and_locations_pth=fr"08_network_analysis\all_companies_branches_and_locations.csv"
+    )
 
     #################################### Network analysis ####################################
+    network_analysis_advanced(
+        netw_pth=NETW_PTH,
+        out_pth=NETW_COMM_PTH
+    )
+    ## Add the community IDs to ALKIS owners
+    for threshold in [0, 25, 50]: # 10 could also be used.
+
+        print(f"Add the community IDs to ALKIS owners with threshold {threshold}\n ")
+
+        create_comp_community_mcomp_dictionary(
+            net_comm_pth=NETW_COMM_PTH,
+            comm_col=f"community_{threshold}",
+            out_pth=COMP_COMMUNITY_MCOMP_DICT.format(threshold))
+
+        get_maximum_hierarchical_distance_in_network(
+            net_comm_pth=NETW_COMM_PTH,
+            comm_col=f"community_{threshold}",
+            out_pth=COMMUNITY_MAX_DIST_DICT_PTH.format(threshold)
+        )
+
+        add_community_number_to_alkis_data(
+            alkis_pth=ALKIS_PTH,
+            comp_comm_mcomp_dict_pth=COMP_COMMUNITY_MCOMP_DICT.format(threshold),
+            comm_col=f"community_{threshold}",
+            community_info_dict_pth=COMMUNITY_INFO_DICT.format(threshold),
+            out_pth=OWNERS_STRETCHED_COMM.format(threshold)
+        )
+
+    #################################### Visualization of network areas and network compostions ########################
+    df = pd.read_csv(NETW_COMM_PTH)
+    helper_functions.create_folder(r"08_network_analysis\figures")
+
+    ## Examples
+    name ='landwirtschaftliche vermoegensverwaltungsgesellschaft seelow mbh'
+
+    ## Get community numbers for company name and plot
+    comm_numbers = get_community_id_of_company(
+        df=df,
+        name=name,
+        comm_column="community_0"
+    )
+    for comm_number in comm_numbers:
+        plot_network_graph_of_community_from_df(
+            df=df,
+            community_column="community_0",
+            community_id=comm_number,
+            out_pth=fr"08_network_analysis\figures\{name}_main_community_{comm_number}.png"
+        )
+
+    ## Get sub-community number for company name and plot
+    comm_numbers = get_community_id_of_company(
+        df=df,
+        name=name,
+        comm_column="community_50"
+    )
+    for comm_number in comm_numbers:
+        plot_network_graph_of_community_from_df(
+            df=df,
+            community_column="community_50",
+            community_id=comm_number,
+            out_pth=fr"08_network_analysis\figures\{name}_sub_community_{comm_number}.png"
+        )
+
+    ## BayWa Aktiengesellschaft
+    comm_numbers = ["40_2", "40_1", "40_0"]
+    for comm_number in comm_numbers:
+        plot_network_graph_of_community_from_df(
+            df=df,
+            community_column="community_50",
+            community_id=comm_number,
+            out_pth=fr"08_network_analysis\figures\baywa aktiengesellschaft_sub_community_{comm_number}.png"
+        )
+
+    #################################### Some further but unused analysis ##############################################
+    ## Get investors that invest in multiple communities but are below the threshold
+    # # # get_common_owners(
+    # # #     net_comm_pth=NETW_COMM_PTH,
+    # # #     out_pth=""
+    # # # )
 
     etime = time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime())
     print("start: " + stime)
