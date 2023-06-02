@@ -251,11 +251,9 @@ def main():
     print("start: " + stime)
 
     os.chdir(WD)
-
-    ## GRIDS
     threshold = 50
 
-
+    #################################### MOVING WINDOW CONCENTRATION CALCULATION ####################################
     helper_functions.create_folder(TABLES_FOLDER_GRID_MW)
 
     ## Open alkis iacs 4km-grid intersection
@@ -357,6 +355,15 @@ def main():
     #         conc_measures_at_mw_grid_combined_mcomp_pth=CONC_MEASURES_MW_GRID_COMBINED_PTH,
     #         grid_4km_with_12km_ids_pth=GRID_4km_WITH_12KM_IDS_PTH,
     #         conc_cols=cols)
+
+    #################################### STATE LEVEL ####################################
+
+    #################################### STATE LEVEL ####################################
+
+    #################################### FARM BUFFERS ####################################
+
+    #################################### MUNICIPALITIES ####################################
+
 
     etime = time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime())
     print("start: " + stime)

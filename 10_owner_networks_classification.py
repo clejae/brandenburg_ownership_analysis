@@ -20,11 +20,12 @@ os.chdir(WD)
 ## Miscellaneous
 BB_SHP = r"00_data\vector\administrative\BB_municipalities.shp"
 STOPWORD_LIST = r"00_data\miscellaneous\stopwords_german.txt"
-CURR_FOLDER = "10_alkis_intersection_with_other_layers"
+CURR_FOLDER = "10_owner_network_classification"
 
 ## Parcels
-ALKIS_IACS_PTH = r"10_alkis_intersection_with_other_layers\alkis_iacs_inters.shp"
-ALKIS_IACS_MUNICIP_PTH = r"10_alkis_intersection_with_other_layers\alkis_iacs_munic_inters.shp"
+ALKIS_IACS_PTH = r"09_alkis_intersection_with_other_layers\alkis_iacs_inters.shp"
+ALKIS_IACS_MUNICIP_PTH = r"09_alkis_intersection_with_other_layers\alkis_munic_iacs_inter.shp"
+ALK_MUNICIP_IACS_UNION_PTH = r"09_alkis_intersection_with_other_layers\alkis_munic_iacs_union.shp"
 
 ## Owners
 OWNERS_W_THRESH_PTH = r"08_network_analysis\owners+communities_thr{0}\08_owners_stretched+comm_thr{0}.csv"
@@ -37,19 +38,19 @@ NETW_COMM_PTH = r"08_network_analysis\network_connections_with_community.csv"
 
 ## Output
 ## Owners paths
-OWNERS_W_THRESH_DIST_PTH = r"11_community_classification\11_owners_stretched+comm_w_thr{0}-dist.csv"
-OWNERS_W_THRESH_CLEANED_PTH = r"11_community_classification\11_owners_stretched+comm_w_thr{0}-dist+cleaned.csv"
-COMMUNITY_INFO_FROM_DAFNE_W_THRESH = r"11_community_classification\community_infos_from_dafne_thr{0}.csv"
-OWNERS_W_THRESH_REDUCED_PTH = r"11_community_classification\11_owners_stretched+comm_w_thr{0}-reduced.csv"
-OWNERS_W_THRESH_AND_LOC_PTH = r"11_community_classification\11_owners_stretched+comm_w_thr{0}-dist+cleaned+loc.csv"
-OWNERS_W_THRESH_AND_LOC_CLASSIFIED_PTH = r"11_community_classification\11_owners_stretched+comm_w_thr{0}-dist+cleaned+loc+class.csv"
+OWNERS_W_THRESH_DIST_PTH = r"10_owner_network_classification\10_owners_stretched+comm_w_thr{0}-dist.csv"
+OWNERS_W_THRESH_CLEANED_PTH = r"10_owner_network_classification\10_owners_stretched+comm_w_thr{0}-dist+cleaned.csv"
+COMMUNITY_INFO_FROM_DAFNE_W_THRESH = r"10_owner_network_classification\community_infos_from_dafne_thr{0}.csv"
+OWNERS_W_THRESH_REDUCED_PTH = r"10_owner_network_classification\10_owners_stretched+comm_w_thr{0}-reduced.csv"
+OWNERS_W_THRESH_AND_LOC_PTH = r"10_owner_network_classification\10_owners_stretched+comm_w_thr{0}-dist+cleaned+loc.csv"
+OWNERS_W_THRESH_AND_LOC_CLASSIFIED_PTH = r"10_owner_network_classification\10_owners_stretched+comm_w_thr{0}-dist+cleaned+loc+class.csv"
 
 ## Classification
-COMMUNITY_CLASSIFICATION_PTH = r"11_community_classification\11_comm_classific_and_info_thr{0}.csv"
+COMMUNITY_CLASSIFICATION_PTH = r"10_owner_network_classification\10_comm_classific_and_info_thr{0}.csv"
 
 ## Miscellaneous
-MUNICIP_NEIGHBOR_DICT_PTH = r"11_community_classification\municipality_neighbors_dict.json"
-CHARACTERISTICS_OF_COMMS_PTH = r"11_community_classification\11_characteristics_comms_from_alkis_thr{0}.csv"
+MUNICIP_NEIGHBOR_DICT_PTH = r"10_owner_network_classification\municipality_neighbors_dict.json"
+CHARACTERISTICS_OF_COMMS_PTH = r"10_owner_network_classification\10_characteristics_comms_from_alkis_thr{0}.csv"
 
 # ------------------------------------------ LOAD DATA & PROCESSING ------------------------------------------#
 
@@ -667,14 +668,14 @@ def classify_communities_from_info_dict(info_dict_pth, alkis_reduced_pth, netw_c
 
     df_alk_complete = pd.merge(df_alk_complete, df_alk_out, "left", on=['mother_company'])
 
-    print("\tLevel C category of community 5_2:", df_alk_complete.loc[df_alk_complete[comm_col].isin(["5_2"]), "level_c_category"].unique())
+    # print("\tLevel C category of community 5_2:", df_alk_complete.loc[df_alk_complete[comm_col].isin(["5_2"]), "level_c_category"].unique())
     # t = df_alk_complete.loc[df_alk_complete[comm_col] == "5_5"].copy()
 
     print("\tCalculate distance of mother companies to parcels.")
     df_cn = df_alk_complete.loc[df_alk_complete["level_c_category"].isin(['2_9_1', '2_9_2', '3_9_1', '4_9_1', '5_9_1'])].copy()
     df_cn.drop_duplicates(subset=["mother_company", "city_mcomp"], inplace=True)
     df_cn = df_cn.loc[(df_cn["city"] != df_cn["city_mcomp"]) & (df_cn["city_mcomp"] != "Unbekannt")].copy()
-    print("\t", len(df_cn))
+    print("\tNo. of entries for which the distances will be calculated:", len(df_cn))
 
     ## Create a list of addresses for all global ultimate owners with address from : "city, country"
     mcomp_addrs = []
@@ -693,10 +694,10 @@ def classify_communities_from_info_dict(info_dict_pth, alkis_reduced_pth, netw_c
     df_cn = df_cn.loc[df_cn["mcomp_loc"].notna()].copy()
     df_cn = pd.concat([df_cn, df_cn_misses])
     df_cn.loc[df_cn["mcomp_loc"].isna(), "mcomp_loc"] = np.nan
-    df_cn.loc[t["city_mcomp"] == "Ledge", "mcomp_loc"] = "POINT (11.8383514 52.9103928)"
+    df_cn.loc[df_cn["city_mcomp"] == "Ledge", "mcomp_loc"] = "POINT (11.8383514 52.9103928)"
 
     ## Add information to ALKIS data frame
-    geom_dict = {row.mother_company: row.mcomp_loc for row in t.itertuples()}
+    geom_dict = {row.mother_company: row.mcomp_loc for row in df_cn.itertuples()}
     df_alk_complete["mcomp_loc"] = df_alk_complete["mother_company"].map(geom_dict)
 
     ## Calculate the distances of the global ultimate owners to the parcels
@@ -705,7 +706,6 @@ def classify_communities_from_info_dict(info_dict_pth, alkis_reduced_pth, netw_c
     df_alk_complete.loc[df_alk_complete["mcomp_loc"].isna(), "mcomp_loc"] = df_alk_complete.loc[df_alk_complete["mcomp_loc"].isna(), "geometry"]
     df_alk_complete.loc[df_alk_complete["mcomp_dist"].isna(), "mcomp_dist"] = df_alk_complete.loc[
         df_alk_complete["mcomp_dist"].isna(), "distance"]
-
 
     print("\tNumber of entries before export:", len(df_alk_complete))
     df_alk_complete.to_csv(out_pth, sep=';', index=False)
@@ -744,6 +744,7 @@ def get_characteristics_of_communities_from_alkis(alkis_iacs_municip_inters_pth,
     #     return unique_municips
 
     print("\tGet characteristics")
+    ## Get geographic information on communities
     def get_all_unique_attributes_in_list(group):
         out = list(set(list(group)))
         return out
@@ -752,10 +753,18 @@ def get_characteristics_of_communities_from_alkis(alkis_iacs_municip_inters_pth,
         area=pd.NamedAgg(column="area", aggfunc="sum"),
         municips_covered=pd.NamedAgg(column="RS", aggfunc=get_all_unique_attributes_in_list),
         num_farms_covered=pd.NamedAgg(column="BTNR", aggfunc=get_all_unique_attributes_in_list),
-        number_agric_parcels=pd.NamedAgg(column="agric", aggfunc="sum"),
+        # number_agric_parcels=pd.NamedAgg(column="agric", aggfunc="sum"),
         all_fstates_owners=pd.NamedAgg(column="fstateofowner", aggfunc=get_all_unique_attributes_in_list),
         level_c_category=pd.NamedAgg(column="level_c_category", aggfunc=get_all_unique_attributes_in_list)
     ).reset_index()
+
+    ## Get information on agricultural owners, do this on entire dataset as some owners
+    ## are not included in the combined owner-parcel dataset due to the intersection with IACS data
+    df_agri = df.groupby(by=[comm_col]).agg(
+        number_agric_parcels=pd.NamedAgg(column="agric", aggfunc="sum")
+    ).reset_index()
+
+    df_area = pd.merge(df_area, df_agri, "left", on=comm_col)
 
     df_area["agric_owners"] = np.where(df_area["number_agric_parcels"] > 0, 1, 0)
     df_area["num_farms_covered"] = [len(lst) for lst in df_area["num_farms_covered"]]
@@ -780,8 +789,6 @@ def get_characteristics_of_communities_from_alkis(alkis_iacs_municip_inters_pth,
 
     print("\tWrite out.")
     df_area.to_csv(out_pth, index=False)
-
-
 
 
 def combine_information_of_communities_and_classify(df_info_alkis_pth, df_info_dafne_pth, owners_pth, comm_col,
@@ -957,9 +964,11 @@ def combine_information_of_communities_and_classify(df_info_alkis_pth, df_info_d
     print("\tAttach to ALKIS.")
     df_alk = pd.merge(df_alk, df_comb[[comm_col, "new_category", "new_category_ext"]], how="left", on=comm_col)
     print("\tUnique categories in new classification:", df_alk["new_category"].unique())
+    # t = df_alk.loc[df_alk["new_category"].isna()].copy()
 
     print("\tAssess again whether all agricultural owners fall into agricultural classes")
     t = df_alk.loc[df_alk["agric"] > 0, "new_category"].unique()
+    t2 = df_alk.loc[df_alk["agric"] > 0].copy()
     print("\tCategories of owners, where agric_owners==1", t)
     t = df_alk.loc[df_alk["comm_agri_related"] > 0, "new_category"].unique()
     print("\tCategories of owners, where comm_agri_related==1", t)
@@ -982,50 +991,50 @@ def main():
     print("start: " + stime)
     os.chdir(WD)
 
-    create_neighbor_dictionary_for_municipalities(
-        municipality_shp_pth=BB_SHP,
-        out_pth=MUNICIP_NEIGHBOR_DICT_PTH
-    )
+    # create_neighbor_dictionary_for_municipalities(
+    #     municipality_shp_pth=BB_SHP,
+    #     out_pth=MUNICIP_NEIGHBOR_DICT_PTH
+    # )
 
     for threshold in [50]:
         print(f"Threshold {threshold}\n ")
         comm_col = f"community_{threshold}"
 
-        calculate_distances(
-            owner_df_pth=OWNERS_W_THRESH_PTH.format(threshold),
-            out_pth=OWNERS_W_THRESH_DIST_PTH.format(threshold)
-        )
+        # calculate_distances(
+        #     owner_df_pth=OWNERS_W_THRESH_PTH.format(threshold),
+        #     out_pth=OWNERS_W_THRESH_DIST_PTH.format(threshold)
+        # )
 
-        unify_attribute_in_alkis(
-            owners_pth=OWNERS_W_THRESH_DIST_PTH.format(threshold),
-            owners_pth_cleaned=OWNERS_W_THRESH_CLEANED_PTH.format(threshold)
-        )
+        # unify_attribute_in_alkis(
+        #     owners_pth=OWNERS_W_THRESH_DIST_PTH.format(threshold),
+        #     owners_pth_cleaned=OWNERS_W_THRESH_CLEANED_PTH.format(threshold)
+        # )
 
-        reduce_alkis_data_to_necessary_information(
-            alkis_iacs_inters_pth=ALKIS_IACS_PTH.format(threshold),
-            owners_pth=OWNERS_W_THRESH_CLEANED_PTH.format(threshold),
-            comm_col=comm_col,
-            out_pth=OWNERS_W_THRESH_REDUCED_PTH.format(threshold)
-        )
+        # reduce_alkis_data_to_necessary_information(
+        #     # alkis_iacs_inters_pth=ALKIS_IACS_PTH.format(threshold),
+        #     owners_pth=OWNERS_W_THRESH_CLEANED_PTH.format(threshold),
+        #     comm_col=comm_col,
+        #     out_pth=OWNERS_W_THRESH_REDUCED_PTH.format(threshold)
+        # )
 
-        derive_community_information_from_dafne_data(
-            dafne_pth=COMMUNITY_DAFNE_CSV_W_THRESH.format(threshold),
-            info_dict_pth=COMMUNITY_INFO_DICT_W_THRESH.format(threshold),
-            comm_col=comm_col,
-            net_branch_pth=NETW_BRANCH_PTH,
-            stopword_lst_pth=STOPWORD_LIST,
-            out_pth=COMMUNITY_INFO_FROM_DAFNE_W_THRESH.format(threshold)
-        )
+        # derive_community_information_from_dafne_data(
+        #     dafne_pth=COMMUNITY_DAFNE_CSV_W_THRESH.format(threshold),
+        #     info_dict_pth=COMMUNITY_INFO_DICT_W_THRESH.format(threshold),
+        #     comm_col=comm_col,
+        #     net_branch_pth=NETW_BRANCH_PTH,
+        #     stopword_lst_pth=STOPWORD_LIST,
+        #     out_pth=COMMUNITY_INFO_FROM_DAFNE_W_THRESH.format(threshold)
+        # )
 
-        classify_communities_from_info_dict(
-            info_dict_pth=COMMUNITY_INFO_DICT_W_THRESH.format(threshold),
-            alkis_reduced_pth=OWNERS_W_THRESH_REDUCED_PTH.format(threshold),
-            netw_conn_pth=COMMUNITY_DAFNE_CSV_W_THRESH,
-            comm_col=comm_col,
-            owners_pth=OWNERS_W_THRESH_CLEANED_PTH.format(threshold),
-            out_pth=OWNERS_W_THRESH_AND_LOC_PTH.format(threshold),
-            curr_folder=CURR_FOLDER
-        )
+        # classify_communities_from_info_dict(
+        #     info_dict_pth=COMMUNITY_INFO_DICT_W_THRESH.format(threshold),
+        #     alkis_reduced_pth=OWNERS_W_THRESH_REDUCED_PTH.format(threshold),
+        #     netw_conn_pth=COMMUNITY_DAFNE_CSV_W_THRESH,
+        #     comm_col=comm_col,
+        #     owners_pth=OWNERS_W_THRESH_CLEANED_PTH.format(threshold),
+        #     out_pth=OWNERS_W_THRESH_AND_LOC_PTH.format(threshold),
+        #     curr_folder=CURR_FOLDER
+        # )
 
         ## Ab hier wird es etwas messy. Da ich hier nur die intersection der IACS+ALKIS Daten nutze, charakterisiere ich nur
         ## die communities, die Land auf den IACS Flächen besitzen. Dadurch entstehen NAs in der "new_category"!

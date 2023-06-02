@@ -5,6 +5,8 @@
 import os
 import time
 import geopandas as gpd
+import shapely
+import pandas as pd
 
 ## Project library
 import helper_functions
@@ -23,10 +25,11 @@ GRIDS_12KM_FOLDER = r"00_data\vector\grids\12km_grids"
 TEST_GRID_SIZES_FOLDER = r"00_data\vector\grids\test_grid_sizes"
 FINAL_GRID_PTH = r"00_data\vector\grids\square_grid_{0}km_v{1:02d}_with_{2}km_POLYIDs.shp"
 ALK_MUNIC_INTERS_PTH = r"09_alkis_intersection_with_other_layers\alkis_munic_inters.shp"
-ALK_MUNICIP_IACS_UNION_PTH = r"09_alkis_intersection_with_other_layers\alkis_munic_iacs_union.shp"
+ALK_MUNICIP_IACS_INTERS_PTH = r"09_alkis_intersection_with_other_layers\alkis_munic_iacs_inter.shp"
 
 ALK_GRID_INTERS_PTH = r"09_alkis_intersection_with_other_layers\alkis_grid_{0}km_v{1:02d}_inters.shp"
-ALK_GRID_IACS_UNION_PTH = r"09_alkis_intersection_with_other_layers\alkis_grid_{0}km_v{1:02d}_iacs_union.shp"
+ALK_GRID_IACS_INTERS_PTH = r"09_alkis_intersection_with_other_layers\alkis_grid_{0}km_v{1:02d}_iacs_inters.shp"
+
 
 # ALK_IACS_INTERS_PTH = r"09_alkis_intersection_with_other_layers\alkis_iacs_inters.shp"
 # ALK_IACS_MUNIC_INTERS_PTH = r"09_alkis_intersection_with_other_layers\alkis_iacs_munic_inters.shp"
@@ -163,7 +166,7 @@ def cut_alkis_shp_with_grid_or_iacs(alkis_pth, grid_pth, out_pth, keep_cols_grid
     gdf_grid['OBJECTID'] = range(len(gdf_grid))
 
     ## Intersect both shapefiles
-    print("\tOverlay with opion:", overlay_option)
+    print("\tOverlay with option:", overlay_option)
     gdf = gpd.overlay(gdf_grid, gdf_alk, how=overlay_option, keep_geom_type=False, make_valid=True)
 
     ## Recalculate area
@@ -187,15 +190,56 @@ def cut_alkis_shp_with_grid_or_iacs(alkis_pth, grid_pth, out_pth, keep_cols_grid
 
         gdf = gdf.loc[(gdf['area'] >= area_thresh) & (gdf['thin_ratio'] > thin_ratio)].copy()
 
+    ## Drop non-polygon geometries
     no_entries = len(gdf)
-    gdf = gdf.loc[(gdf.geometry.type == 'POLYGON')].copy()
-    no_entries_clean = len(gdf)
+
+    ## Test if there are non-polygon geometries in geometry collections
+    gdf_test = gdf.loc[gdf.geometry.geometry.type == 'GeometryCollection'].copy()
+    gdf_filtered = gdf_test.copy()
+    if len(gdf_test) > 0:
+        orig_len = len(gdf)
+        gdf_done = gdf.loc[gdf.geometry.geometry.type != 'GeometryCollection'].copy()
+        for i, row in gdf_test.iterrows():
+            if type(row.geometry) == shapely.geometry.collection.GeometryCollection:
+
+                # get all polygons
+                shapes = []
+                for shape in row.geometry:
+                    if type(shape) != shapely.geometry.polygon.LineString and type(shape) != shapely.geometry.polygon.Point:
+                        shapes.append(shape)
+                        # print(i, row.EIGENTUEME, row.OGC_FID)
+                    # else:
+                    #     print(i, row.EIGENTUEME, row.OGC_FID)
+                if len(shapes) > 0:
+                    gdf_filtered.at[i, 'geometry'] = shapely.geometry.collection.GeometryCollection(shapes)
+                    print(gdf_filtered.loc[gdf_filtered.index == i, "geometry"])
+                else:
+                    gdf_filtered.at[i, 'geometry'] = None
+        gdf_filtered = gdf_filtered.loc[gdf_filtered["geometry"] != None].copy()
+
+        gdf_proc = pd.concat([gdf_done, gdf_filtered])
+        gdf_proc.sort_values(by="OGC_FID", inplace=True)
+        after_len = len(gdf_proc)
+        print(f"\tOriginal length: {orig_len} - Processed length: {after_len}")
+
+        gdf_out = gdf_proc.loc[gdf_proc.geometry.geometry.type != 'LineString'].copy()
+        gdf_out = gdf_out.loc[gdf_out.geometry.geometry.type != 'Point'].copy()
+        gdf_out = gdf_out.loc[gdf_out.geometry.geometry.type != 'MultiLineString'].copy()
+        gdf_out = gdf_out.loc[gdf_out.geometry.geometry.type != 'MultiPoint'].copy()
+    else:
+        gdf_out = gdf.loc[gdf.geometry.geometry.type != 'LineString'].copy()
+        gdf_out = gdf_out.loc[gdf_out.geometry.geometry.type != 'Point'].copy()
+        gdf_out = gdf_out.loc[gdf_out.geometry.geometry.type != 'MultiLineString'].copy()
+        gdf_out = gdf_out.loc[gdf_out.geometry.geometry.type != 'MultiPoint'].copy()
+
+    # gdf_out = gdf.copy()
+    no_entries_clean = len(gdf_out)
 
     print("\tNo. of entries with no polygon:", no_entries - no_entries_clean)
 
     ## Write to disct
     print(f"\tWrite intersection to disc {out_pth}")
-    gdf.to_file(out_pth)
+    gdf_out.to_file(out_pth)
 
 
 def main():
@@ -208,7 +252,7 @@ def main():
     ## concentration measures will be calculated 9 times, each time with a different 12x12km windows that shifts around
     ## a middle point. For this analysis we created a 4x4km grid, and nine 12x12km grids. For each grid cell in the
     ## 4x4km, we save the information in which 12x12km grid cell it lands. This way, we only need to intersect the ALKIS
-    ## data once with the 4x4km grid and then can group the 4x4km grid cells with the IDs of the 12x12km grid cell IDs.
+    ## data once with the 4x4km grid and then we can group the 4x4km grid cells with the IDs of the 12x12km grid cell IDs.
     ## 12km are used because of findings by Plogman et al. 2022 (https://doi.org/10.1016/j.landusepol.2022.106036)
     target_grid_res = 4
 
@@ -219,14 +263,72 @@ def main():
     #     offsets=[0],
     #     out_folder=GRIDS_12KM_FOLDER
     # )
-    #
-    # ## Create nine 12km grids
+
+    ## Create nine 12km grids
     # create_polygon_grid(
     #     grid_res=12000,
     #     ref_shp_pth=PTH_IACS,
     #     offsets=[12000, 8000, 4000],
     #     out_folder=GRIDS_12KM_FOLDER
     # )
+
+    ## Add 12km IDs to 4km Shapefile.
+    # target_grid = gpd.read_file(f"{GRIDS_12KM_FOLDER}\square_grid_{target_grid_res}km_v01.shp")
+    # out_grid = target_grid.copy()
+    # for v in range(1, 10):
+    #     larger_grid = gpd.read_file(f"{GRIDS_12KM_FOLDER}\square_grid_{12}km_v{v:02d}.shp")
+    #     larger_grid.rename(columns={"POLYID": f"v{v:02d}_POLYID"}, inplace=True)
+    #     out_grid = gpd.overlay(larger_grid, out_grid, how="intersection", keep_geom_type=False, make_valid=True)
+    #     out_grid = out_grid.loc[out_grid["geometry"].astype(str).str.contains("POLYGON") == True].copy()
+    #     out_grid.index = range(1, len(out_grid)+1)
+    # out_grid = out_grid[["POLYID", "v01_POLYID", "v02_POLYID", "v03_POLYID", "v04_POLYID", "v05_POLYID", "v06_POLYID",
+    #                      "v07_POLYID", "v08_POLYID", "v09_POLYID", "geometry"]]
+    # out_grid.to_file(FINAL_GRID_PTH.format(target_grid_res, 1, 12))
+
+    # ## Intersect ALKIS with 4x4km Grid
+    # cut_alkis_shp_with_grid_or_iacs(
+    #     alkis_pth=PTH_ALKIS_REDUCED,
+    #     grid_pth=f"{GRIDS_12KM_FOLDER}\square_grid_{target_grid_res}km_v01.shp",
+    #     keep_cols_grid=['POLYID', 'geometry'],
+    #     keep_cols_alkis=['OGC_FID', 'EIGENTUEME', 'geometry'],
+    #     out_pth=ALK_GRID_INTERS_PTH.format(target_grid_res, 1),
+    #     shape_parameters=None,
+    #     overlay_option='intersection')
+
+    # ## Intersect ALKIS-Grid intersection with IACS
+    # cut_alkis_shp_with_grid_or_iacs(
+    #     alkis_pth=ALK_GRID_INTERS_PTH.format(target_grid_res, 1),
+    #     grid_pth=PTH_IACS,
+    #     keep_cols_grid=['BTNR', 'ID', 'geometry'],
+    #     keep_cols_alkis=['OGC_FID', 'EIGENTUEME', 'POLYID', 'geometry'],
+    #     out_pth=ALK_GRID_IACS_INTERS_PTH.format(target_grid_res, 1),
+    #     shape_parameters=None,
+    #     overlay_option='intersection'
+    # )
+
+    ################################ INTERSECTION WITH MUNICIPALITIES ################################
+    ## 1. Intersect ALKIS with Municipalities
+    cut_alkis_shp_with_grid_or_iacs(
+        alkis_pth=PTH_ALKIS_REDUCED,
+        grid_pth=MUNICIPALITY_PTH,
+        keep_cols_grid=['GEN', 'RS', 'geometry'],
+        keep_cols_alkis=['OGC_FID', 'EIGENTUEME', 'geometry'],
+        out_pth=ALK_MUNIC_INTERS_PTH,
+        shape_parameters=None,
+        overlay_option='intersection')
+
+    ## 2. Intersect ALKIS-MUNICIP intersection with IACS
+    cut_alkis_shp_with_grid_or_iacs(
+        alkis_pth=ALK_MUNIC_INTERS_PTH,
+        grid_pth=PTH_IACS,
+        keep_cols_grid=['BTNR', 'CODE', 'ID', 'geometry'],
+        keep_cols_alkis=['OGC_FID', 'EIGENTUEME', 'GEN', 'RS', 'geometry'],
+        out_pth=ALK_MUNICIP_IACS_INTERS_PTH,
+        shape_parameters=None,
+        overlay_option='intersection'
+    )
+
+    #################### BETTER WORKFLOW IF THE UNION WOULD PROPERLY WORK #################################
 
     ## We first intersect the ALKIS data with the Grids to assign each parcel to a grid cell (or parts of parcels if
     ## they intersect with multiple grid cells. Then we add the information who uses the land (IACS) via the overlay-
@@ -235,6 +337,7 @@ def main():
     ## no information on the land users, as otherwise in later steps, not the entire dataset could be used (e.g. in
     ## 10_owner_networks_classification --> get_characteristics_of_communities_from_alkis)
 
+    # ALK_GRID_IACS_UNION_PTH = r"09_alkis_intersection_with_other_layers\alkis_grid_{0}km_v{1:02d}_iacs_union.shp"
     # ## Add 12km IDs to 4km Shapefile.
     # target_grid = gpd.read_file(f"{GRIDS_12KM_FOLDER}\square_grid_{target_grid_res}km_v01.shp")
     # out_grid = target_grid.copy()
@@ -259,77 +362,78 @@ def main():
     #     overlay_option='intersection')
 
     ## Overlay-union ALKIS-Grid intersection with IACS
-    cut_alkis_shp_with_grid_or_iacs(
-        alkis_pth=ALK_GRID_INTERS_PTH.format(target_grid_res, 1),
-        grid_pth=PTH_IACS,
-        keep_cols_grid=['BTNR', 'ID', 'geometry'],
-        keep_cols_alkis=['OGC_FID', 'EIGENTUEME', 'POLYID', 'geometry'],
-        out_pth=ALK_GRID_IACS_UNION_PTH.format(target_grid_res, 1),
-        shape_parameters=None,
-        overlay_option='union'
-    )
-
-    ## Remove areas that were added from IACS Shapefile, because the polygons don't overlap perfectly.
-    print("Remove areas without an OGC_FID, i.e. that they are not part of the ALKIS data.")
-    union = gpd.read_file(ALK_GRID_IACS_UNION_PTH.format(target_grid_res, 1))
-    union = union.loc[union["OGC_FID"].notna()].copy()
-
-    ## Check for missing parcels and missing owners
-    orig_alkis = gpd.read_file(PTH_ALKIS_REDUCED)
-
-    uni_ids_full = orig_alkis["OGC_FID"].unique()
-    uni_ids = union["OGC_FID"].unique()
-    miss = set(uni_ids_full).difference(uni_ids)
-    miss_owners = list(orig_alkis.loc[orig_alkis["OGC_FID"].isin(miss), "EIGENTUEME"].unique())
-
-    uni_owners = union["EIGENTUEME"].unique()
-    owners_missing = set(miss_owners).difference(uni_owners)
-
-    print("No. of missing owners:", len(owners_missing))
-
-    union.to_file(ALK_GRID_IACS_UNION_PTH.format(target_grid_res, 1))
+    # cut_alkis_shp_with_grid_or_iacs(
+    #     alkis_pth=ALK_GRID_INTERS_PTH.format(target_grid_res, 1),
+    #     grid_pth=PTH_IACS,
+    #     keep_cols_grid=['BTNR', 'ID', 'geometry'],
+    #     keep_cols_alkis=['OGC_FID', 'EIGENTUEME', 'POLYID', 'geometry'],
+    #     out_pth=ALK_GRID_IACS_UNION_PTH.format(target_grid_res, 1),
+    #     shape_parameters=None,
+    #     overlay_option='union'
+    # )
+    #
+    # ## Remove areas that were added from IACS Shapefile, because the polygons don't overlap perfectly.
+    # print("Remove areas without an OGC_FID, i.e. that they are not part of the ALKIS data.")
+    # union = gpd.read_file(ALK_GRID_IACS_UNION_PTH.format(target_grid_res, 1))
+    # union = union.loc[union["OGC_FID"].notna()].copy()
+    #
+    # ## Check for missing parcels and missing owners
+    # orig_alkis = gpd.read_file(PTH_ALKIS_REDUCED)
+    #
+    # uni_ids_full = orig_alkis["OGC_FID"].unique()
+    # uni_ids = union["OGC_FID"].unique()
+    # miss = set(uni_ids_full).difference(uni_ids)
+    # miss_owners = list(orig_alkis.loc[orig_alkis["OGC_FID"].isin(miss), "EIGENTUEME"].unique())
+    #
+    # uni_owners = union["EIGENTUEME"].unique()
+    # owners_missing = set(miss_owners).difference(uni_owners)
+    #
+    # print("No. of missing owners:", len(owners_missing))
+    #
+    # union.to_file(ALK_GRID_IACS_UNION_PTH.format(target_grid_res, 1))
 
     ################################ INTERSECTION WITH MUNICIPALITIES ################################
+    # ALK_MUNICIP_IACS_UNION_PTH = r"09_alkis_intersection_with_other_layers\alkis_munic_iacs_union.shp"
     ## 1. Intersect ALKIS with Municipalities
-    cut_alkis_shp_with_grid_or_iacs(
-        alkis_pth=PTH_ALKIS_REDUCED,
-        grid_pth=MUNICIPALITY_PTH,
-        keep_cols_grid=['GEN', 'RS', 'geometry'],
-        keep_cols_alkis=['OGC_FID', 'EIGENTUEME', 'geometry'],
-        out_pth=ALK_MUNIC_INTERS_PTH,
-        shape_parameters=None,
-        overlay_option='intersection')
+    # cut_alkis_shp_with_grid_or_iacs(
+    #     alkis_pth=PTH_ALKIS_REDUCED,
+    #     grid_pth=MUNICIPALITY_PTH,
+    #     keep_cols_grid=['GEN', 'RS', 'geometry'],
+    #     keep_cols_alkis=['OGC_FID', 'EIGENTUEME', 'geometry'],
+    #     out_pth=ALK_MUNIC_INTERS_PTH,
+    #     shape_parameters=None,
+    #     overlay_option='intersection')
 
-    ## 2. Overlay-union ALKIS-MUNICIP intersection with IACS
-    cut_alkis_shp_with_grid_or_iacs(
-        alkis_pth=ALK_MUNIC_INTERS_PTH,
-        grid_pth=PTH_IACS,
-        keep_cols_grid=['BTNR', 'CODE', 'ID', 'geometry'],
-        keep_cols_alkis=['OGC_FID', 'EIGENTUEME', 'GEN', 'RS', 'geometry'],
-        out_pth=ALK_MUNICIP_IACS_UNION_PTH,
-        shape_parameters=None,
-        overlay_option='union'
-    )
-
-    ## Remove areas that were added from IACS Shapefile, because the polygons don't overlap perfectly.
-    print("Remove areas without an OGC_FID, i.e. that they are not part of the ALKIS data.")
-    union = gpd.read_file(ALK_MUNICIP_IACS_UNION_PTH)
-    union = union.loc[union["OGC_FID"].notna()].copy()
-
-    ## Check for missing parcels and missing owners
-    orig_alkis = gpd.read_file(PTH_ALKIS_REDUCED)
-
-    uni_ids_full = orig_alkis["OGC_FID"].unique()
-    uni_ids = union["OGC_FID"].unique()
-    miss = set(uni_ids_full).difference(uni_ids)
-    miss_owners = list(orig_alkis.loc[orig_alkis["OGC_FID"].isin(miss), "EIGENTUEME"].unique())
-
-    uni_owners = union["EIGENTUEME"].unique()
-    owners_missing = set(miss_owners).difference(uni_owners)
-
-    print("No. of missing owners:", len(owners_missing))
-
-    union.to_file(ALK_MUNICIP_IACS_UNION_PTH)
+    # ## 2. Overlay-union ALKIS-MUNICIP intersection with IACS
+    # cut_alkis_shp_with_grid_or_iacs(
+    #     alkis_pth=ALK_MUNIC_INTERS_PTH,
+    #     grid_pth=PTH_IACS,
+    #     keep_cols_grid=['BTNR', 'CODE', 'ID', 'geometry'],
+    #     keep_cols_alkis=['OGC_FID', 'EIGENTUEME', 'GEN', 'RS', 'geometry'],
+    #     out_pth=ALK_MUNICIP_IACS_UNION_PTH,
+    #     shape_parameters=None,
+    #     overlay_option='union'
+    # )
+    #
+    # ## Remove areas that were added from IACS Shapefile, because the polygons don't overlap perfectly.
+    # print("Remove areas without an OGC_FID, i.e. that they are not part of the ALKIS data.")
+    # union = gpd.read_file(ALK_MUNICIP_IACS_UNION_PTH)
+    # union = union.loc[union["OGC_FID"].notna()].copy()
+    #
+    # ## Check for missing parcels and missing owners
+    # orig_alkis = gpd.read_file(PTH_ALKIS_REDUCED)
+    #
+    # uni_ids_full = orig_alkis["OGC_FID"].unique()
+    # uni_ids = union["OGC_FID"].unique()
+    # miss = set(uni_ids_full).difference(uni_ids)
+    # miss_owners = list(orig_alkis.loc[orig_alkis["OGC_FID"].isin(miss), "EIGENTUEME"].unique())
+    #
+    # uni_owners = union["EIGENTUEME"].unique()
+    # owners_missing = set(miss_owners).difference(uni_owners)
+    #
+    # print("No. of missing owners:", len(owners_missing))
+    #
+    # union.to_file(ALK_MUNICIP_IACS_UNION_PTH)
 
 
     # ################################ TEST DIFFERENT GRID SIZES ################################
