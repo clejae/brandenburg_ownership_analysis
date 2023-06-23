@@ -1,5 +1,5 @@
-# Clemens Jänicke
-# github Repo: https://github.com/clejae
+# Author:
+# github repository:
 
 # ------------------------------------------ LOAD PACKAGES ---------------------------------------------------#
 import os
@@ -30,8 +30,7 @@ ALK_MUNICIP_IACS_INTERS_PTH = r"09_alkis_intersection_with_other_layers\alkis_mu
 ALK_GRID_INTERS_PTH = r"09_alkis_intersection_with_other_layers\alkis_grid_{0}km_v{1:02d}_inters.shp"
 ALK_GRID_IACS_INTERS_PTH = r"09_alkis_intersection_with_other_layers\alkis_grid_{0}km_v{1:02d}_iacs_inters.shp"
 
-
-# ALK_IACS_INTERS_PTH = r"09_alkis_intersection_with_other_layers\alkis_iacs_inters.shp"
+ALK_IACS_INTERS_PTH = r"09_alkis_intersection_with_other_layers\alkis_iacs_inters.shp"
 # ALK_IACS_MUNIC_INTERS_PTH = r"09_alkis_intersection_with_other_layers\alkis_iacs_munic_inters.shp"
 # IACS_MUNIC_INTERS_PTH = r"00_data\vector\IACS\IACS_municip_BB_2020_klassifiziert_25832.shp"
 
@@ -308,25 +307,36 @@ def main():
 
     ################################ INTERSECTION WITH MUNICIPALITIES ################################
     ## 1. Intersect ALKIS with Municipalities
+    # cut_alkis_shp_with_grid_or_iacs(
+    #     alkis_pth=PTH_ALKIS_REDUCED,
+    #     grid_pth=MUNICIPALITY_PTH,
+    #     keep_cols_grid=['GEN', 'RS', 'geometry'],
+    #     keep_cols_alkis=['OGC_FID', 'EIGENTUEME', 'geometry'],
+    #     out_pth=ALK_MUNIC_INTERS_PTH,
+    #     shape_parameters=None,
+    #     overlay_option='intersection')
+    #
+    # ## 2. Intersect ALKIS-MUNICIP intersection with IACS
+    # cut_alkis_shp_with_grid_or_iacs(
+    #     alkis_pth=ALK_MUNIC_INTERS_PTH,
+    #     grid_pth=PTH_IACS,
+    #     keep_cols_grid=['BTNR', 'CODE', 'ID', 'geometry'],
+    #     keep_cols_alkis=['OGC_FID', 'EIGENTUEME', 'GEN', 'RS', 'geometry'],
+    #     out_pth=ALK_MUNICIP_IACS_INTERS_PTH,
+    #     shape_parameters=None,
+    #     overlay_option='intersection'
+    # )
+
+    ################################ INTERSECTION WITH IACS ONLY ################################
+    ## 1. Intersect ALKIS with IACS
     cut_alkis_shp_with_grid_or_iacs(
         alkis_pth=PTH_ALKIS_REDUCED,
-        grid_pth=MUNICIPALITY_PTH,
-        keep_cols_grid=['GEN', 'RS', 'geometry'],
-        keep_cols_alkis=['OGC_FID', 'EIGENTUEME', 'geometry'],
-        out_pth=ALK_MUNIC_INTERS_PTH,
-        shape_parameters=None,
-        overlay_option='intersection')
-
-    ## 2. Intersect ALKIS-MUNICIP intersection with IACS
-    cut_alkis_shp_with_grid_or_iacs(
-        alkis_pth=ALK_MUNIC_INTERS_PTH,
         grid_pth=PTH_IACS,
         keep_cols_grid=['BTNR', 'CODE', 'ID', 'geometry'],
-        keep_cols_alkis=['OGC_FID', 'EIGENTUEME', 'GEN', 'RS', 'geometry'],
-        out_pth=ALK_MUNICIP_IACS_INTERS_PTH,
+        keep_cols_alkis=['OGC_FID', 'EIGENTUEME', 'geometry'],
+        out_pth=ALK_IACS_INTERS_PTH,
         shape_parameters=None,
-        overlay_option='intersection'
-    )
+        overlay_option='intersection')
 
     #################### BETTER WORKFLOW IF THE UNION WOULD PROPERLY WORK #################################
 

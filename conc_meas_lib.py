@@ -385,7 +385,7 @@ def get_share_of_owner_categories_per_spatial_unit(df, target_unit_id_col, area_
             return out
 
         ## First aggregate by owner, take categories with
-        agg = sub[[area_col, owner_col, category_col]].groupby(owner_col).agg(
+        agg = sub.groupby(owner_col).agg(
             area=pd.NamedAgg(column=area_col, aggfunc="sum"),
             category=pd.NamedAgg(column=category_col, aggfunc=get_all_unique_attributes_in_list)
         ).reset_index()

@@ -1,5 +1,5 @@
-# Clemens Jänicke
-# github Repo: https://github.com/clejae
+# Author:
+# github repository:
 
 # ------------------------------------------ LOAD PACKAGES ---------------------------------------------------#
 import os
@@ -32,6 +32,9 @@ def main():
     helper_functions.create_folder("09_alkis_intersection_with_other_layers")
     helper_functions.create_folder("10_owner_network_classification")
     helper_functions.create_folder("11_ownership_concentration_calculation")
+    helper_functions.create_folder("12_ownership_concentration_plotting")
+    helper_functions.create_folder("13_general_statistics")
+    helper_functions.create_folder("14_paper_figures")
 
     etime = time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime())
     print("start: " + stime)

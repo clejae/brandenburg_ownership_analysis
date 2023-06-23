@@ -303,11 +303,11 @@ def histogramm_in_grid(df, cols, out_pth, nrow=None,  x_labels=None, y_label=Non
 
     print(f'Plotting histogramms of {cols}\n Saving at {out_pth}')
 
-    matplotlib.rcParams.update({'font.size': 14})
+    matplotlib.rcParams.update({'font.size': 16})
 
     if not nrow:
         nrow = 1
-        y_size = 6
+        y_size = 7
         ncol = len(cols)
     else:
         y_size = nrow * 2

@@ -1,5 +1,5 @@
-# Clemens Jänicke
-# github Repo: https://github.com/clejae
+# Author:
+# github repository:
 
 # ------------------------------------------ LOAD PACKAGES ---------------------------------------------------#
 import json

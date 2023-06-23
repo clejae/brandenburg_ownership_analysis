@@ -1,7 +1,9 @@
-# Clemens Jänicke
-# github Repo: https://github.com/clejae
+# Author:
+# github repository:
 
 # ------------------------------------------ LOAD PACKAGES ---------------------------------------------------#
+import warnings
+import sys
 import pandas as pd
 import geopandas as gpd
 import os
@@ -20,24 +22,36 @@ WD = r"C:\Users\IAMO\Documents\work_data\ownership_paper"
 os.chdir(WD)
 
 ## Input paths
-ALKIS_IACS_GRID_PTH = r"10_alkis_intersection_with_other_layers\alkis_iacs_grid_{0}km_v{1:02d}_inters.shp"
-OWNERS_W_THRESH_PTH = r"11_community_classification\11_owners_stretched+comm_w_thr{0}-dist+cleaned+loc+class.csv" #r"11_community_classification\11_owners_stretched+comm_w_thr{0}+loc.csv"
+ALKIS_IACS_GRID_PTH = r"09_alkis_intersection_with_other_layers\alkis_grid_{0}km_v{1:02d}_iacs_inters.shp"
+ALK_MUNICIP_IACS_INTERS_PTH = r"09_alkis_intersection_with_other_layers\alkis_munic_iacs_inter.shp"
+OWNERS_W_THRESH_PTH = r"10_owner_network_classification\10_owners_stretched+comm_w_thr{0}-dist+cleaned+loc+class.csv"
 GRID_4km_WITH_12KM_IDS_PTH = r"00_data\vector\grids\square_grid_4km_v01_with_12km_POLYIDs.shp"
+GRID_FOLDER = r"00_data\vector\grids"
 
 ## Output
-DICT_4KM_TO_12KM_IDS = rf"13_ownership_concentration\4km_polyid_to_12km_polyids.json"
-GRID_FOLDER = r"00_data\vector\grids"
-TABLES_FOLDER_GRID_MW = r"13_ownership_concentration\grids"
+## 1. Moving window grid
+DICT_4KM_TO_12KM_IDS = rf"11_ownership_concentration\4km_polyid_to_12km_polyids.json"
+TABLES_FOLDER_GRID_MW = r"11_ownership_concentration\mw_grid"
 
-CONC_MEASURES_MW_GRID_VERSIONS_PTH = r"13_ownership_concentration\tables\grids\mw_conc_meas-grid_{0}km_v{1:02d}-{2}.csv"
-SHARE_CATEG_MW_GRID_VERSIONS_PTH = r"13_ownership_concentration\tables\grids\mw_share_counts_categories-grid_{0}km_v{1:02d}-{2}.csv"
-COUNT_CATEG_MW_GRID_VERSIONS_PTH = r"13_ownership_concentration\tables\grids\mw_counts_categories_in_topx-grid_{0}km_v{1:02d}-{2}.csv"
+CONC_MEASURES_MW_GRID_VERSIONS_PTH = r"11_ownership_concentration\mw_grid\mw_conc_meas-grid_{0}km_v{1:02d}-{2}.csv"
+SHARE_CATEG_MW_GRID_VERSIONS_PTH = r"11_ownership_concentration\mw_grid\mw_share_counts_categories-grid_{0}km_v{1:02d}-{2}.csv"
+COUNT_CATEG_MW_GRID_VERSIONS_PTH = r"11_ownership_concentration\mw_grid\mw_counts_categories_in_topx-grid_{0}km_v{1:02d}-{2}.csv"
 
-CONC_MEASURES_MW_GRID_COMBINED_PTH = r"13_ownership_concentration\tables\grids\mw_mean_conc_meas-{0}.csv"
-SHARE_CATEG_MW_GRID_COMBINED_PTH = r"13_ownership_concentration\tables\grids\mw_mean_share_counts_categories-{0}.csv"
-COUNT_CATEG_MW_GRID_COMBINED_PTH = r"13_ownership_concentration\tables\grids\mw_mean_counts_categories_in_topx-{0}.csv"
+CONC_MEASURES_MW_GRID_COMBINED_PTH = r"11_ownership_concentration\mw_grid\mw_mean_conc_meas-{0}.csv"
+SHARE_CATEG_MW_GRID_COMBINED_PTH = r"11_ownership_concentration\mw_grid\mw_mean_share_counts_categories-{0}.csv"
+COUNT_CATEG_MW_GRID_COMBINED_PTH = r"11_ownership_concentration\mw_grid\mw_mean_counts_categories_in_topx-{0}.csv"
 
+## 2. State level (Brandenburg)
+TABLES_FOLDER_STATE = r"11_ownership_concentration\state"
+CONC_MEASURES_STATE_PTH = r"11_ownership_concentration\state\state_conc_meas-{0}.csv"
 
+## 3. Municipalities
+TABLES_FOLDER_MUNICP = r"11_ownership_concentration\municipalities"
+CONC_MEASURES_MUNICIP_PTH = r"11_ownership_concentration\municipalities\municip_conc_meas-{0}.csv"
+SHARE_CATEG_MUNICIP_PTH = r"11_ownership_concentration\municipalities\municip_share_counts_categories-{0}.csv"
+COUNT_CATEG_MUNICIP_PTH = r"11_ownership_concentration\municipalities\municip_counts_categories_in_topx-{0}.csv"
+
+## 4. Farm buffers
 
 # ------------------------------------------ PROCESSING ------------------------------------------#
 
@@ -108,7 +122,7 @@ def combine_mw_grid_results(grid_4km_with_12km_ids_pth, conc_of_grid_version_pth
         if not descr:
             pth = conc_of_grid_version_pth.format(grid_res, version, threshold)
         else:
-            pth = conc_of_grid_version_pth.format(grid_res, version, threshold, descr)
+            pth = conc_of_grid_version_pth.format(grid_res, version, descr)
 
         df = pd.read_csv(pth, sep=',')
 
@@ -146,11 +160,31 @@ def moving_window_concentration_measure_calculation(parcels, owner_df, dict_4km_
                                                     shares_grid_versions_pth=None,
                                                     shares_grid_combined_pth=None,
                                                     counts_grid_versions_pth=None,
-                                                    counts_grod_combined_pth=None
+                                                    # counts_grod_combined_pth=None,
+                                                    category_col=None,
                                                     ):
     """
-    Calculates the concentration measures for the 9 versions of the moving windows at the level of the 4km polygons.
-    :return:
+       Calculates the concentration measures for the 9 versions of the moving windows at the level of the 4km polygons.
+
+   Args:
+       parcels: Geodataframe with parcel geometries.
+       owner_df: Dataframe with owner information.
+       dict_4km_to_12km_ids_pth: Dictionary that can translate 4km-grid IDs to 12km-grid IDs.
+       threshold: Threshold that was used for the owner network calculation.
+       target_grid_res: Resolution of the target grid.
+       descr: Descriptions string for output.
+       owner_col: Column name for the owner names used to identify unique owners.
+       conc_measures_at_mw_grid_versions_mcomp_pth: Output path for the 9 version of the concentration measure calculation.
+       conc_measures_at_mw_grid_combined_mcomp_pth: Output path for the combined version of the concentration measures calculation.
+       grid_4km_with_12km_ids_pth: Path to 4km-grid geodataframe with the 12-km grid IDs.
+       conc_cols: Column names of concentration measures for which the mean should be calculated from the 9 versions.
+       shares_grid_versions_pth: Provide output path if you want to calculate the shares of the owner categories per cell.
+       shares_grid_combined_pth: Output path for the combined version of the shares measures calculation. Only needed if shares are calculated.
+       counts_grid_versions_pth: Provide output path if you want to calculate how often an owner category occurs in the largest x owners.
+       category_col: Only needed if shares of counts are calculated.
+
+   Returns: None.
+
     """
 
     print("Calculate concentration measures with moving window over 4km grid.")
@@ -163,20 +197,20 @@ def moving_window_concentration_measure_calculation(parcels, owner_df, dict_4km_
     for version in range(1, 10):
         print("\n\t12km version", version)
 
-        col = f"v{version:02d}_POLYID"
+        target_unid_id_col = f"v{version:02d}_POLYID"
         v_dict = grid_v_dict[f"v{version:02d}"]
 
         ## translate 4km polyid to 12km polyid
-        parcels[col] = parcels["POLYID"].map(v_dict)
+        parcels[target_unid_id_col] = parcels["POLYID"].map(v_dict)
 
         ## drop all parcels that have not 12km polyid assigned
-        gdf_curr = parcels.dropna(subset=[col])
+        gdf_curr = parcels.dropna(subset=[target_unid_id_col])
 
         ####################################################################################################################
-        print(f"\tCalculate concentration measures with name of mother companies - with {threshold}% threshold")
+        print(f"\tCalculate concentration measures with column {owner_col} - with {threshold}% threshold")
         print("\tCombine parcels with owner data")
         df_comb_wt = helper_functions.combine_parcels_with_owners(
-            gdf_curr[[col, "OGC_FID", "BTNR", "area"]],
+            gdf_curr[[target_unid_id_col, "OGC_FID", "BTNR", "area"]],
             owner_df[["OGC_FID", "mother_company", "owner_merge", "level_c_category", "new_category", "new_category_ext"]])
 
         print("\tCalculation")
@@ -184,41 +218,55 @@ def moving_window_concentration_measure_calculation(parcels, owner_df, dict_4km_
         print("\tWrite results to", out_pth)
         conc_meas_lib.calculate_concentration_measures_from_df(
             df=df_comb_wt,
-            target_unit_id_col=col,
+            target_unit_id_col=target_unid_id_col,
             area_col='area',
             owner_col=owner_col,
             out_pth=out_pth)
 
         if shares_grid_versions_pth:
+            if not category_col:
+                warnings.warn("No category_col provided!")
+                exit()
             print("\tCalculate shares of categories")
             out_pth = shares_grid_versions_pth.format(target_grid_res, version, descr)
-            print("\tWrite results to", shares_grid_versions_pth)
+            print("\tWrite results to", out_pth)
             conc_meas_lib.get_share_of_owner_categories_per_spatial_unit(
                 df=df_comb_wt,
-                target_unit_id_col=col,
-                area_col='area',
-                owner_col='mother_company',
-                category_col=owner_col,
-                out_pth=shares_grid_versions_pth)
-
-        if counts_grid_versions_pth:
-            print("\tCount no. of categories in top owners")
-            out_pth = counts_grid_versions_pth.format(target_grid_res, version, descr)
-            print("\tWrite results to", out_pth)
-            conc_meas_lib.get_count_of_owner_categories_per_spatial_unit(
-                df=df_comb_wt,
-                target_unit_id_col=col,
+                target_unit_id_col=target_unid_id_col,
                 area_col='area',
                 owner_col=owner_col,
-                category_col="new_category",
-                out_pth=out_pth
-            )
+                category_col=category_col,
+                out_pth=out_pth)
+
+    ## If you want to calculate the counts for the 9 versions of the 12km grid, then move it into the loop
+    ## (with tab-->), but it is probably not necessary. Also delete "version = 1"
+    if counts_grid_versions_pth:
+        if not category_col:
+            warnings.warn("No category_col provided!")
+            exit()
+            version = 1 # this refers to version of 4km grid
+        df_comb_wt = helper_functions.combine_parcels_with_owners(
+            parcels[["POLYID", "OGC_FID", "BTNR", "area"]], # use parcels here and not gdf_curr!
+            owner_df[["OGC_FID", "mother_company", "owner_merge", "level_c_category", "new_category", "new_category_ext"]])
+
+        print("\tCount no. of categories in top x owners")
+        out_pth = counts_grid_versions_pth.format(target_grid_res, version, descr)
+        print("\tWrite results to", out_pth)
+        conc_meas_lib.get_count_of_owner_categories_per_spatial_unit(
+            df=df_comb_wt,
+            target_unit_id_col="POLYID",
+            area_col='area',
+            owner_col=owner_col,
+            category_col=category_col,
+            out_pth=out_pth
+        )
 
     combine_mw_grid_results(
         conc_of_grid_version_pth=conc_measures_at_mw_grid_versions_mcomp_pth,
         grid_4km_with_12km_ids_pth=grid_4km_with_12km_ids_pth,
         threshold=threshold,
         cols=conc_cols,
+        descr=descr,
         out_pth=conc_measures_at_mw_grid_combined_mcomp_pth.format(descr))
 
     if shares_grid_versions_pth:
@@ -230,20 +278,124 @@ def moving_window_concentration_measure_calculation(parcels, owner_df, dict_4km_
             grid_4km_with_12km_ids_pth=grid_4km_with_12km_ids_pth,
             threshold=threshold,
             cols=cols,
+            descr=descr,
             out_pth=shares_grid_combined_pth.format(descr))
 
-    if counts_grid_versions_pth:
-        cols = pd.read_csv(counts_grid_versions_pth.format(4, 1, descr))
-        cols = list(cols.columns)
-        cols.remove("id_sp_unit")
-        # # # f1 = lambda x, y: f"count_{x}_top{y}"
-        # # # cols = [f1(cat, topx) for cat in ['1_1_1', '2_9_1'] for topx in [1, 3, 5]]
-        combine_mw_grid_results(
-            conc_of_grid_version_pth=counts_grid_versions_pth,
-            grid_4km_with_12km_ids_pth=grid_4km_with_12km_ids_pth,
-            threshold=threshold,
-            cols=cols,
-            out_pth=counts_grod_combined_pth.format(descr))
+    ## Uncomment this if you want to calculate the counts of the owner categories for
+    ## all 9 versions of the 12km grid.
+    ## if counts_grid_versions_pth:
+    ##     cols = pd.read_csv(counts_grid_versions_pth.format(4, 1, descr))
+    ##     cols = list(cols.columns)
+    ##     cols.remove("id_sp_unit")
+    ##     # # # f1 = lambda x, y: f"count_{x}_top{y}"
+    ##     # # # cols = [f1(cat, topx) for cat in ['1_1_1', '2_9_1'] for topx in [1, 3, 5]]
+    ##     combine_mw_grid_results(
+    ##         conc_of_grid_version_pth=counts_grid_versions_pth,
+    ##         grid_4km_with_12km_ids_pth=grid_4km_with_12km_ids_pth,
+    ##         threshold=threshold,
+    ##         cols=cols,
+    ##         descr=descr,
+    ##         out_pth=counts_grod_combined_pth.format(descr))
+
+
+def state_level_concentration_measure_calculation(parcels, owner_df, threshold, descr, owner_col,
+                                                   conc_measures_at_state_level_pth):
+    """
+
+    Args:
+        parcels: Geodataframe with parcel geometries
+        owner_df: Dataframe with owner information.
+        threshold: Threshhold used for determining the owner networks.
+        descr: Description with which the output paths will be appended.
+        owner_col: Column of owner names to use for identifying unique owners (e.g. mother companies vs. single owners)
+        conc_measures_at_state_level_pth: Output path to dataframe with concentration measures.
+
+    Returns:
+
+    """
+    parcels["state_id"] = "BB"
+
+    print(f"\tCalculate concentration measures with column {owner_col} - with {threshold}% threshold")
+    print("\tCombine parcels with owner data")
+    df_comb_wt = helper_functions.combine_parcels_with_owners(
+        parcels[["state_id", "OGC_FID", "BTNR", "area"]],
+        owner_df[["OGC_FID", "mother_company", "owner_merge", "level_c_category", "new_category", "new_category_ext"]])
+
+    print("\tCalculation")
+    out_pth = conc_measures_at_state_level_pth.format(descr)
+    print("\tWrite results to", out_pth)
+    dir_name = os.path.dirname(out_pth)
+    helper_functions.create_folder(dir_name)
+
+    conc_meas_lib.calculate_concentration_measures_from_df(
+        df=df_comb_wt,
+        target_unit_id_col="state_id",
+        area_col='area',
+        owner_col=owner_col,
+        out_pth=out_pth)
+
+
+def municipality_concentration_measure_calculation(parcels, owner_df, threshold, descr, owner_col,
+                                                   conc_measures_at_municipalities_pth,
+                                                   shares_municipalities_pth=None,
+                                                   counts_municipalities_pth=None
+                                                   ):
+    """
+
+    Args:
+        parcels: Geodataframe with parcel geometries
+        owner_df: Dataframe with owner information.
+        threshold: Threshhold used for determining the owner networks.
+        descr: Description with which the output paths will be appended.
+        owner_col: Column of owner names to use for identifying unique owners (e.g. mother companies vs. single owners)
+        conc_measures_at_municipalities_pth: Output path to dataframe with concentration measures.
+        shares_municipalities_pth: Output path to dateframe with shares of owner categories.
+        counts_municipalities_pth: Output path to dataframe with counts of owner in categories.
+
+    Returns:
+
+    """
+    ####################################################################################################################
+    print(f"\tCalculate concentration measures with column {owner_col} - with {threshold}% threshold")
+    print("\tCombine parcels with owner data")
+    df_comb_wt = helper_functions.combine_parcels_with_owners(
+        parcels[["RS", "OGC_FID", "BTNR", "area"]],
+        owner_df[["OGC_FID", "mother_company", "owner_merge", "level_c_category", "new_category", "new_category_ext"]])
+
+    print("\tCalculation")
+    out_pth = conc_measures_at_municipalities_pth.format(descr)
+    print("\tWrite results to", out_pth)
+    # conc_meas_lib.calculate_concentration_measures_from_df(
+    #     df=df_comb_wt,
+    #     target_unit_id_col="RS",
+    #     area_col='area',
+    #     owner_col=owner_col,
+    #     out_pth=out_pth)
+
+    if shares_municipalities_pth:
+        print("\tCalculate shares of categories")
+        out_pth = shares_municipalities_pth.format(descr)
+        print("\tWrite results to", out_pth)
+        conc_meas_lib.get_share_of_owner_categories_per_spatial_unit(
+            df=df_comb_wt,
+            target_unit_id_col="RS",
+            area_col='area',
+            owner_col='mother_company',
+            category_col=owner_col,
+            out_pth=out_pth)
+
+    if counts_municipalities_pth:
+        print("\tCount no. of categories in top owners")
+        out_pth = shares_municipalities_pth.format(descr)
+        print("\tWrite results to", out_pth)
+        conc_meas_lib.get_count_of_owner_categories_per_spatial_unit(
+            df=df_comb_wt,
+            target_unit_id_col="RS",
+            area_col='area',
+            owner_col=owner_col,
+            category_col="new_category",
+            out_pth=out_pth
+        )
 
 
 def main():
@@ -253,7 +405,12 @@ def main():
     os.chdir(WD)
     threshold = 50
 
-    #################################### MOVING WINDOW CONCENTRATION CALCULATION ####################################
+    ## Read owner data
+    print(f"\tRead owner data with community derived with {threshold}% threshold")
+    owner_df = pd.read_csv(OWNERS_W_THRESH_PTH.format(threshold), sep=";")
+    owner_df.loc[(owner_df["new_category"].isna()), "new_category"] = 'noagPR'
+
+    # #################################### MOVING WINDOW CONCENTRATION CALCULATION ####################################
     helper_functions.create_folder(TABLES_FOLDER_GRID_MW)
 
     ## Open alkis iacs 4km-grid intersection
@@ -269,15 +426,11 @@ def main():
         out_pth=DICT_4KM_TO_12KM_IDS
     )
 
-    ## Read owner data
-    print(f"\tRead owner data with community derived with {threshold}% threshold")
-    owner_df = pd.read_csv(OWNERS_W_THRESH_PTH.format(threshold), sep=";")
-    owner_df.loc[(owner_df["new_category"].isna()), "new_category"] = 'noagPR'
-
     ## On all IACS areas for company networks
     cols = ["gini_coeff", "cr1", "cr3", "cr5", "hhi", "total_area", "num_owners", "lac", "palma_v1", "palma_v2",
             "rosenbluth_index", "share_p100", "share_p95_99", "share_v19", "share_m50", "share_b40"]
 
+    descr = f"mother_companies-comm_w_thr{threshold}-iacs_areas"
     moving_window_concentration_measure_calculation(
         parcels=parcels.loc[parcels["BTNR"].notna()],
         owner_df=owner_df,
@@ -285,32 +438,36 @@ def main():
         owner_col='mother_company',
         threshold=threshold,
         target_grid_res=grid_res,
-        descr=f"mother_companies-comm_w_thr{threshold}-iacs_areas",
+        descr=descr,
         conc_measures_at_mw_grid_versions_mcomp_pth=CONC_MEASURES_MW_GRID_VERSIONS_PTH,
         conc_measures_at_mw_grid_combined_mcomp_pth=CONC_MEASURES_MW_GRID_COMBINED_PTH,
         grid_4km_with_12km_ids_pth=GRID_4km_WITH_12KM_IDS_PTH,
         conc_cols=cols,
         counts_grid_versions_pth=COUNT_CATEG_MW_GRID_VERSIONS_PTH,
-        counts_grod_combined_pth=COUNT_CATEG_MW_GRID_COMBINED_PTH)
+        shares_grid_versions_pth=SHARE_CATEG_MW_GRID_VERSIONS_PTH,
+        shares_grid_combined_pth=SHARE_CATEG_MW_GRID_COMBINED_PTH,
+        category_col="new_category"
+        # counts_grod_combined_pth=COUNT_CATEG_MW_GRID_COMBINED_PTH
+    )
 
-    ## On all IACS areas for single_owners
-    cols = ["gini_coeff", "cr1", "cr3", "cr5", "hhi", "total_area", "num_owners", "lac", "palma_v1", "palma_v2",
-            "rosenbluth_index", "share_p100", "share_p95_99", "share_v19", "share_m50", "share_b40"]
-
-    moving_window_concentration_measure_calculation(
-        parcels=parcels.loc[parcels["BTNR"].notna()],
-        owner_df=owner_df,
-        dict_4km_to_12km_ids_pth=DICT_4KM_TO_12KM_IDS,
-        owner_col='owner_merge',
-        threshold=threshold,
-        target_grid_res=grid_res,
-        descr="owner_merge-iacs_areas",
-        conc_measures_at_mw_grid_versions_mcomp_pth=CONC_MEASURES_MW_GRID_VERSIONS_PTH,
-        conc_measures_at_mw_grid_combined_mcomp_pth=CONC_MEASURES_MW_GRID_COMBINED_PTH,
-        grid_4km_with_12km_ids_pth=GRID_4km_WITH_12KM_IDS_PTH,
-        conc_cols=cols)
-
-    # ## On private land
+    # ## On all IACS areas for single_owners
+    # cols = ["gini_coeff", "cr1", "cr3", "cr5", "hhi", "total_area", "num_owners", "lac", "palma_v1", "palma_v2",
+    #         "rosenbluth_index", "share_p100", "share_p95_99", "share_v19", "share_m50", "share_b40"]
+    #
+    # moving_window_concentration_measure_calculation(
+    #     parcels=parcels.loc[parcels["BTNR"].notna()],
+    #     owner_df=owner_df,
+    #     dict_4km_to_12km_ids_pth=DICT_4KM_TO_12KM_IDS,
+    #     owner_col='owner_merge',
+    #     threshold=threshold,
+    #     target_grid_res=grid_res,
+    #     descr="owner_merge-iacs_areas",
+    #     conc_measures_at_mw_grid_versions_mcomp_pth=CONC_MEASURES_MW_GRID_VERSIONS_PTH,
+    #     conc_measures_at_mw_grid_combined_mcomp_pth=CONC_MEASURES_MW_GRID_COMBINED_PTH,
+    #     grid_4km_with_12km_ids_pth=GRID_4km_WITH_12KM_IDS_PTH,
+    #     conc_cols=cols)
+    #
+    # ## Only on private land
     # private_categories = ["4_1_1", "4_9_1", "5_1_1", "5_2_1", "5_2_2", "5_2_3", "5_2_4", "5_2_5", "5_2_6", "5_3_1",
     #                       "5_9_1"]
     # moving_window_concentration_measure_calculation(
@@ -330,6 +487,7 @@ def main():
     # owner_classes = ["PUBLIC", "nCONETW", "aCONETW", "NONPRO", "siCOMP", "a_siCOMP", "noagPR", "agriPR", "CHURCH"]
     #
     # for owner_class in owner_classes:
+    #     ## Only the current owner class
     #     moving_window_concentration_measure_calculation(
     #         parcels=parcels.loc[parcels["BTNR"].nona()],
     #         owner_df=owner_df.loc[owner_df["new_category"] == owner_class],
@@ -343,6 +501,7 @@ def main():
     #         grid_4km_with_12km_ids_pth=GRID_4km_WITH_12KM_IDS_PTH,
     #         conc_cols=cols)
     #
+    #     ## All but the current owner class
     #     moving_window_concentration_measure_calculation(
     #         parcels=parcels.loc[parcels["BTNR"].nona()],
     #         owner_df=owner_df.loc[owner_df["new_category"] != owner_class],
@@ -357,12 +516,89 @@ def main():
     #         conc_cols=cols)
 
     #################################### STATE LEVEL ####################################
-
-    #################################### STATE LEVEL ####################################
-
-    #################################### FARM BUFFERS ####################################
+    # helper_functions.create_folder(TABLES_FOLDER_STATE)
+    # parcels = gpd.read_file(ALK_MUNICIP_IACS_INTERS_PTH)
+    # parcels["area"] = parcels["geometry"].area
+    #
+    # descr = f"mother_companies-comm_w_thr{threshold}-iacs_areas"
+    # state_level_concentration_measure_calculation(
+    #     parcels=parcels,
+    #     owner_df=owner_df,
+    #     threshold=threshold,
+    #     descr=descr,
+    #     owner_col="mother_company",
+    #     conc_measures_at_state_level_pth=CONC_MEASURES_STATE_PTH
+    # )
+    #
+    # descr = f"owner_merge-iacs_areas"
+    # state_level_concentration_measure_calculation(
+    #     parcels=parcels,
+    #     owner_df=owner_df,
+    #     threshold=threshold,
+    #     descr=descr,
+    #     owner_col="owner_merge",
+    #     conc_measures_at_state_level_pth=CONC_MEASURES_STATE_PTH
+    # )
 
     #################################### MUNICIPALITIES ####################################
+    # helper_functions.create_folder(TABLES_FOLDER_MUNICP)
+    # parcels = gpd.read_file(ALK_MUNICIP_IACS_INTERS_PTH)
+    # parcels["area"] = parcels["geometry"].area
+    #
+    # descr = f"mother_companies-comm_w_thr{threshold}-iacs_areas"
+    # municipality_concentration_measure_calculation(
+    #     parcels=parcels,
+    #     owner_df=owner_df,
+    #     threshold=threshold,
+    #     descr=descr,
+    #     owner_col="mother_company",
+    #     conc_measures_at_municipalities_pth=CONC_MEASURES_MUNICIP_PTH,
+    #     shares_municipalities_pth=SHARE_CATEG_MUNICIP_PTH,
+    #     counts_municipalities_pth=COUNT_CATEG_MUNICIP_PTH)
+    #
+    # descr = f"mother_companies-comm_w_thr{threshold}-iacs_areas-private_land"
+    # df_sub = owner_df.loc[owner_df["new_category"].isin(['CONETW', 'noagPR',  'agriPR',  'siCOMP', 'COOPER', 'NONPRO'])].copy()
+    # municipality_concentration_measure_calculation(
+    #     parcels=parcels,
+    #     owner_df=df_sub,
+    #     threshold=threshold,
+    #     descr=descr,
+    #     owner_col="mother_company",
+    #     conc_measures_at_municipalities_pth=CONC_MEASURES_MUNICIP_PTH)
+    #
+    # descr = f"mother_companies-comm_w_thr{threshold}-iacs_areas-agric_owners"
+    # df_sub = owner_df.loc[owner_df["agric"] == 1].copy()
+    # municipality_concentration_measure_calculation(
+    #     parcels=parcels,
+    #     owner_df=df_sub,
+    #     threshold=threshold,
+    #     descr=descr,
+    #     owner_col="mother_company",
+    #     conc_measures_at_municipalities_pth=CONC_MEASURES_MUNICIP_PTH)
+    #
+    # descr = f"mother_companies-comm_w_thr{threshold}-iacs_areas-agric_networks"
+    # df_sub = owner_df.loc[owner_df["comm_agri_related"] == 1].copy()
+    # municipality_concentration_measure_calculation(
+    #     parcels=parcels,
+    #     owner_df=df_sub,
+    #     threshold=threshold,
+    #     descr=descr,
+    #     owner_col="mother_company",
+    #     conc_measures_at_municipalities_pth=CONC_MEASURES_MUNICIP_PTH)
+    #
+    # for owner_class in list(owner_df["new_category"].unique()):
+    #     descr = f"mother_companies-comm_w_thr{threshold}-iacs_areas-only_{owner_class}"
+    #     df_sub = owner_df.loc[owner_df["new_category"] != owner_class].copy()
+    #     municipality_concentration_measure_calculation(
+    #         parcels=parcels,
+    #         owner_df=df_sub,
+    #         threshold=threshold,
+    #         descr=descr,
+    #         owner_col="mother_company",
+    #         conc_measures_at_municipalities_pth=CONC_MEASURES_MUNICIP_PTH)
+
+    #################################### FARM BUFFERS ####################################
+    ## ToDo (optional): implement this here from old workflow
 
 
     etime = time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime())
