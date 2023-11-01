@@ -1548,7 +1548,7 @@ def add_community_number_to_alkis_data(alkis_pth, comp_comm_mcomp_dict_pth, comm
     df_red = df_alk.drop_duplicates(subset="conn_left")
     df_red = df_red.loc[df_red["level3"] == '1_1_1'].copy()
 
-    ## write a function that looks if the first name and the first part of the family name are in another string
+    ## function that looks if the first name and the first part of the family name are in another string
     def func(x, search_lst):
         out = [item if ((item.split(" ")[0] in x) & (item.split("_")[0].split(' ')[-1] in x)) else False for item in search_lst]
         out = [item for item in out if item != False]

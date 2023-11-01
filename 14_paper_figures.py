@@ -76,10 +76,10 @@ def fig_share_and_characteristics_owner_categories(owner_df_pth, threshold, out_
     cat_col = "new_category"
     print(df[cat_col].unique())
     t = df.loc[df[cat_col].isna()].copy()
-    df[cat_col] = df[cat_col].map({"PUBLIC": "PU", "nCONETW": "CN", "aCONETW": "AH", "NONPRO": "NP", "siCOMP": "nSC", "a_siCOMP": "aSC",
-                                           "noagPR": "nPR", "agriPR": "aPR", "CHURCH": "RE"})
-    # labels = ["PU", "CN", "NP", "nSC", "aSC", "nPR", "aPR", "CH"]
-    labels = ["aPR", "nPR", "aSC", "nSC", "AH", "CN", "PU", "NP", "RE"]
+    df[cat_col] = df[cat_col].map({"PUBLIC": "PU", "nCONETW": "nCN", "aCONETW": "aCN", "NONPRO": "OTH", "siCOMP": "nSC",
+                                   "a_siCOMP": "aSC", "noagPR": "nPR", "agriPR": "aPR", "CHURCH": "RE"})
+    # labels = ["PU", "nCN", "OTH", "nSC", "aSC", "nPR", "aPR", "CH"]
+    labels = ["aPR", "nPR", "aSC", "nSC", "aCN", "nCN", "PU", "OTH", "RE"]
 
     print("\tPrepare dfs for plotting")
     ## ger average plot size per owner and owner class
@@ -173,10 +173,10 @@ def fig_share_and_characteristics_owner_categories(owner_df_pth, threshold, out_
         "nPR": '#bcbd22',
         "aSC": '#c898f5',
         "nSC": '#9467bd',
-        "CN": '#ff7f0e',
-        "AH": '#fcb97e',
+        "nCN": '#ff7f0e',
+        "aCN": '#fcb97e',
         "PU": '#1f77b4',
-        "NP": '#2ca02c',
+        "OTH": '#2ca02c',
         "RE": '#7f7f7f'
     }
 
@@ -197,11 +197,11 @@ def fig_share_and_characteristics_owner_categories(owner_df_pth, threshold, out_
     ## Area share
     ax2.set_title("a)", loc="left")
     ## sort rows in manual order
-    df_mapping = pd.DataFrame({cat_col: ["aPR", "CN", "AH", "nSC", "PU", "NP", "nPR", "aSC", "RE"],})
+    df_mapping = pd.DataFrame({cat_col: ["aPR", "nCN", "aCN", "nSC", "PU", "OTH", "nPR", "aSC", "RE"],})
     sort_mapping = df_mapping.reset_index().set_index(cat_col)
     df_num['cat_num'] = df_num[cat_col].map(sort_mapping['index'])
     df_num.sort_values('cat_num', inplace=True)
-    # df_num[cat_col] = pd.Categorical(df_num[cat_col], categories=["CN", "AH", "PU", "RE", "nPR", "aPR", "aSC", "nSC", "NP"], ordered=True)
+    # df_num[cat_col] = pd.Categorical(df_num[cat_col], categories=["nCN", "aCN", "PU", "RE", "nPR", "aPR", "aSC", "nSC", "OTH"], ordered=True)
     # df_num.sort_values(by="area_share", inplace=True)
     wedges, texts = ax2.pie(df_num["area"], colors=[colour_dict[key] for key in df_num[cat_col]],
                             radius=1, wedgeprops=dict(width=0.3, edgecolor='w', linewidth=.01), startangle=50)
@@ -364,12 +364,12 @@ def fig_appendix_change_in_distances_aggregation_levels(owner_df_pth, threshold,
     cat_col = "new_category"
     print(df[cat_col].unique())
     t = df.loc[df[cat_col].isna()].copy()
-    df[cat_col] = df[cat_col].map({"PUBLIC": "PU", "nCONETW": "CN", "aCONETW": "AH", "NONPRO": "NP", "siCOMP": "nSC", "a_siCOMP": "aSC",
+    df[cat_col] = df[cat_col].map({"PUBLIC": "PU", "nCONETW": "nCN", "aCONETW": "aCN", "NONPRO": "OTH", "siCOMP": "nSC", "a_siCOMP": "aSC",
                                            "noagPR": "nPR", "agriPR": "aPR", "CHURCH": "RE"})
-    # labels = ["PU", "CN", "NP", "nSC", "aSC", "nPR", "aPR", "CH"]
-    labels = ["aPR", "nPR", "aSC", "nSC", "AH", "CN", "PU", "NP", "RE"]
+    # labels = ["PU", "nCN", "OTH", "nSC", "aSC", "nPR", "aPR", "CH"]
+    labels = ["aPR", "nPR", "aSC", "nSC", "aCN", "nCN", "PU", "OTH", "RE"]
 
-    df = df.loc[df[cat_col].isin(["AH", "CN"])]
+    df = df.loc[df[cat_col].isin(["aCN", "nCN"])]
 
 
     print("\tPrepare dfs for plotting")
@@ -481,10 +481,10 @@ def table_largest_owner_examples(owner_df_pth, threshold, out_pth):
     cat_col = "new_category"
     print(df[cat_col].unique())
     t = df.loc[df[cat_col].isna()].copy()
-    df[cat_col] = df[cat_col].map({"PUBLIC": "PU", "nCONETW": "CN", "aCONETW": "AH", "NONPRO": "NP", "siCOMP": "nSC", "a_siCOMP": "aSC",
+    df[cat_col] = df[cat_col].map({"PUBLIC": "PU", "nCONETW": "nCN", "aCONETW": "aCN", "NONPRO": "OTH", "siCOMP": "nSC", "a_siCOMP": "aSC",
                                            "noagPR": "nPR", "agriPR": "aPR", "CHURCH": "RE"})
-    # labels = ["PU", "CN", "NP", "nSC", "aSC", "nPR", "aPR", "CH"]
-    labels = ["aPR", "nPR", "aSC", "nSC", "AH", "CN", "PU", "NP", "RE"]
+    # labels = ["PU", "nCN", "OTH", "nSC", "aSC", "nPR", "aPR", "CH"]
+    labels = ["aPR", "nPR", "aSC", "nSC", "aCN", "nCN", "PU", "OTH", "RE"]
 
     print("\tPrepare dfs for plotting")
     ## ger average plot size per owner and owner class
@@ -542,12 +542,12 @@ def fig_appendix_characteristics_company_networks(owner_df_pth, threshold, out_p
     cat_col = "new_category"
     print(df[cat_col].unique())
     t = df.loc[df[cat_col].isna()].copy()
-    df[cat_col] = df[cat_col].map({"PUBLIC": "PU", "nCONETW": "CN", "aCONETW": "AH", "NONPRO": "NP", "siCOMP": "nSC", "a_siCOMP": "aSC",
+    df[cat_col] = df[cat_col].map({"PUBLIC": "PU", "nCONETW": "nCN", "aCONETW": "aCN", "NONPRO": "OTH", "siCOMP": "nSC", "a_siCOMP": "aSC",
                                            "noagPR": "nPR", "agriPR": "aPR", "CHURCH": "RE"})
-    # labels = ["PU", "CN", "NP", "nSC", "aSC", "nPR", "aPR", "CH"]
-    labels = ["aPR", "nPR", "aSC", "nSC", "AH", "CN", "PU", "NP", "RE"]
+    # labels = ["PU", "nCN", "OTH", "nSC", "aSC", "nPR", "aPR", "CH"]
+    labels = ["aPR", "nPR", "aSC", "nSC", "aCN", "nCN", "PU", "OTH", "RE"]
 
-    df = df.loc[df[cat_col].isin(["AH", "CN"])]
+    df = df.loc[df[cat_col].isin(["aCN", "nCN"])]
 
     ## ToDo: Compare mean area and distance per owner_merge and mother_company
 
@@ -642,10 +642,10 @@ def fig_appendix_characteristics_company_networks(owner_df_pth, threshold, out_p
         "nPR": '#bcbd22',
         "aSC": '#c898f5',
         "nSC": '#9467bd',
-        "CN": '#ff7f0e',
-        "AH": '#fcb97e',
+        "nCN": '#ff7f0e',
+        "aCN": '#fcb97e',
         "PU": '#1f77b4',
-        "NP": '#2ca02c',
+        "OTH": '#2ca02c',
         "RE": '#7f7f7f'
     }
 
@@ -764,17 +764,17 @@ def fig_share_and_location_largest_owners(df_res_pth, df_ct_pth, df_sh_pth, dist
     shp["main_owner_cat_share"] = shp[cols].max(axis=1)
 
     shp["top_owner_cat"] = shp["top_owner_cat"].map(
-        {"PUBLIC": "PU", "nCONETW": "CN", "aCONETW": "AH", "NONPRO": "NP", "siCOMP": "nSC", "a_siCOMP": "aSC",
+        {"PUBLIC": "PU", "nCONETW": "nCN", "aCONETW": "aCN", "NONPRO": "OTH", "siCOMP": "nSC", "a_siCOMP": "aSC",
          "noagPR": "nPR", "agriPR": "aPR", "CHURCH": "RE"})
     shp["top_owner_cat"] = pd.Categorical(shp["top_owner_cat"],
-                                            categories=["CN", "AH", "PU", "RE", "nPR", "aPR", "aSC", "nSC", "NP"],
+                                            categories=["nCN", "aCN", "PU", "RE", "nPR", "aPR", "aSC", "nSC", "OTH"],
                                             ordered=True)
 
     shp["main_owner_cat"] = shp["main_owner_cat"].map(
-        {"PUBLIC": "PU", "nCONETW": "CN", "aCONETW": "AH", "NONPRO": "NP", "siCOMP": "nSC", "a_siCOMP": "aSC",
+        {"PUBLIC": "PU", "nCONETW": "nCN", "aCONETW": "aCN", "NONPRO": "OTH", "siCOMP": "nSC", "a_siCOMP": "aSC",
          "noagPR": "nPR", "agriPR": "aPR", "CHURCH": "RE"})
     shp["main_owner_cat"] = pd.Categorical(shp["main_owner_cat"],
-                                          categories=["CN", "AH", "PU", "RE", "nPR", "aPR", "aSC", "nSC", "NP"],
+                                          categories=["nCN", "aCN", "PU", "RE", "nPR", "aPR", "aSC", "nSC", "OTH"],
                                           ordered=True)
 
     ## Map with main owner_class
@@ -783,10 +783,10 @@ def fig_share_and_location_largest_owners(df_res_pth, df_ct_pth, df_sh_pth, dist
         "nPR": '#bcbd22',
         "aSC": '#c898f5',
         "nSC": '#9467bd',
-        "CN": '#ff7f0e',
-        "AH": '#fcb97e',
+        "nCN": '#ff7f0e',
+        "aCN": '#fcb97e',
         "PU": '#1f77b4',
-        "NP": '#2ca02c',
+        "OTH": '#2ca02c',
         "RE": '#7f7f7f'
     }
 
@@ -794,7 +794,7 @@ def fig_share_and_location_largest_owners(df_res_pth, df_ct_pth, df_sh_pth, dist
     shp["color"] = shp[col].map(colour_dict)
     shp = shp.loc[shp["color"].notna()].copy()
 
-    custom_patches = [Patch(facecolor=colour_dict[v], label=v) for v in ["CN", "AH", "nPR", "aPR", "aSC", "nSC", "PU", "RE", "NP"]]
+    custom_patches = [Patch(facecolor=colour_dict[v], label=v) for v in ["nCN", "aCN", "nPR", "aPR", "aSC", "nSC", "PU", "RE", "OTH"]]
 
     print("Plotting")
 
@@ -809,7 +809,7 @@ def fig_share_and_location_largest_owners(df_res_pth, df_ct_pth, df_sh_pth, dist
         legend=False,
         edgecolor='none'
     )
-    ax1.legend(handles=custom_patches, bbox_to_anchor=(1.1, .01), ncol=math.ceil(len(custom_patches) / 2))  # ,
+    ax1.legend(handles=custom_patches, bbox_to_anchor=(1.1, .01), ncol=math.ceil(len(custom_patches) / 3))  # ,
 
     shp2 = gpd.read_file(district_shp_pth)
     shp2.plot(
@@ -1605,12 +1605,12 @@ def table_number_owners_and_area_in_company_networks(owner_df_pth, threshold, ou
     print(df[cat_col].unique())
     t = df.loc[df[cat_col].isna()].copy()
     df[cat_col] = df[cat_col].map(
-        {"PUBLIC": "PU", "nCONETW": "CN", "aCONETW": "AH", "NONPRO": "NP", "siCOMP": "nSC", "a_siCOMP": "aSC",
+        {"PUBLIC": "PU", "nCONETW": "nCN", "aCONETW": "aCN", "NONPRO": "OTH", "siCOMP": "nSC", "a_siCOMP": "aSC",
          "noagPR": "nPR", "agriPR": "aPR", "CHURCH": "RE"})
-    # labels = ["PU", "CN", "NP", "nSC", "aSC", "nPR", "aPR", "CH"]
-    labels = ["aPR", "nPR", "aSC", "nSC", "AH", "CN", "PU", "NP", "RE"]
+    # labels = ["PU", "nCN", "OTH", "nSC", "aSC", "nPR", "aPR", "CH"]
+    labels = ["aPR", "nPR", "aSC", "nSC", "aCN", "nCN", "PU", "OTH", "RE"]
 
-    df = df.loc[df[cat_col].isin(["CN", "AH"])].copy()
+    df = df.loc[df[cat_col].isin(["nCN", "aCN"])].copy()
 
     df_agg_om = df.groupby("owner_merge").agg(
         distance=pd.NamedAgg("distance", "mean")
@@ -1655,66 +1655,66 @@ def main():
     #     threshold=50,
     #     out_pth=OWNER_DF_FOR_PLOTTING.format(50)
     # )
-    #
-    # fig_share_and_characteristics_owner_categories(
-    #     owner_df_pth=OWNER_DF_FOR_PLOTTING,
-    #     threshold=50,
-    #     out_pth=rf"14_paper_figures\figures\fig_share_and_characteristics_owner_categories.png"
-    # )
 
-    # fig_appendix_change_in_distances_aggregation_levels(
-    #     owner_df_pth=OWNER_DF_FOR_PLOTTING,
-    #     threshold=50,
-    #     out_pth=rf"14_paper_figures\figures\fig_appendix_change_in_distances_aggregation_levels.png"
-    # )
-    #
-    # fig_appendix_characteristics_company_networks(
-    #     owner_df_pth=OWNER_DF_FOR_PLOTTING,
-    #     threshold=50,
-    #     out_pth=rf"14_paper_figures\figures\fig_appendix_characteristics_company_networks.png"
-    # )
-    #
-    # table_largest_owner_examples(
-    #     owner_df_pth=OWNER_DF_FOR_PLOTTING,
-    #     threshold=50,
-    #     out_pth=rf"14_paper_figures\tables\table_largest_owner_examples.csv"
-    # )
-
-    table_number_owners_and_area_in_company_networks(
+    fig_share_and_characteristics_owner_categories(
         owner_df_pth=OWNER_DF_FOR_PLOTTING,
         threshold=50,
-        out_pth=rf"14_paper_figures\tables\table_number_owners_and_area_in_company_networks.csv"
+        out_pth=rf"14_paper_figures\figures\fig03_share_and_characteristics_owner_categories.png"
     )
 
-    # fig_comparison_map_and_histograms_concentration_measures(
+    fig_comparison_map_and_histograms_concentration_measures(
+        threshold=50,
+        df_res_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
+        district_shp_pth=DISTRICT_SHP_PTH,
+        out_pth=r"14_paper_figures\figures\fig04_comparison_histograms_concentrations_measures.png"
+    )
+
+    fig_histograms_change_concentration_measures(
+        df_res_omerge_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-owner_merge-iacs_areas.csv",
+        df_res_mcomp_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
+        out_pth=r"14_paper_figures\figures\fig05_histograms_change_concentration_measures.png"
+    )
+
+    fig_share_and_location_largest_owners(
+        df_res_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
+        df_ct_pth=rf"11_ownership_concentration\mw_grid\mw_counts_categories_in_topx-grid_4km_v01-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
+        df_sh_pth=rf"11_ownership_concentration\mw_grid\mw_mean_share_counts_categories-mother_companies-comm_w_thr50-iacs_areas.csv",
+        district_shp_pth=DISTRICT_SHP_PTH,
+        out_pth=r"14_paper_figures\figures\fig06_share_and_location_largest_owners.png"
+    )
+
+    fig_appendix_change_in_distances_aggregation_levels(
+        owner_df_pth=OWNER_DF_FOR_PLOTTING,
+        threshold=50,
+        out_pth=rf"14_paper_figures\figures\fig_appendix03_change_in_distances_aggregation_levels.png"
+    )
+
+    fig_appendix_characteristics_company_networks(
+        owner_df_pth=OWNER_DF_FOR_PLOTTING,
+        threshold=50,
+        out_pth=rf"14_paper_figures\figures\fig_appendix04_characteristics_company_networks.png"
+    )
+
+    table_change_in_concentration_measures(
+        cm_omerge_grid_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-owner_merge-iacs_areas.csv",
+        cm_mcomp_grid_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
+        cm_omerge_state_pth=rf"11_ownership_concentration\state\state_conc_meas-owner_merge-iacs_areas.csv",
+        cm_mcomp_state_pth=rf"11_ownership_concentration\state\state_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
+        out_pth=rf"14_paper_figures\tables\table02_change_in_concentration_measures.csv"
+    )
+
+    table_largest_owner_examples(
+        owner_df_pth=OWNER_DF_FOR_PLOTTING,
+        threshold=50,
+        out_pth=rf"14_paper_figures\tables\table03_largest_owner_examples.csv"
+    )
+
+    # table_number_owners_and_area_in_company_networks(
+    #     owner_df_pth=OWNER_DF_FOR_PLOTTING,
     #     threshold=50,
-    #     df_res_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
-    #     district_shp_pth=DISTRICT_SHP_PTH,
-    #     out_pth=r"14_paper_figures\figures\fig_comparison_histograms_concentrations_measures.png"
-    # )
-    #
-    # fig_histograms_change_concentration_measures(
-    #     df_res_omerge_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-owner_merge-iacs_areas.csv",
-    #     df_res_mcomp_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
-    #     out_pth=r"14_paper_figures\figures\fig_histograms_change_concentration_measures.png"
-    # )
-    #
-    # fig_share_and_location_largest_owners(
-    #     df_res_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
-    #     df_ct_pth=rf"11_ownership_concentration\mw_grid\mw_counts_categories_in_topx-grid_4km_v01-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
-    #     df_sh_pth=rf"11_ownership_concentration\mw_grid\mw_mean_share_counts_categories-mother_companies-comm_w_thr50-iacs_areas.csv",
-    #     district_shp_pth=DISTRICT_SHP_PTH,
-    #     out_pth=r"14_paper_figures\figures\fig_share_and_location_largest_owners.png"
+    #     out_pth=rf"14_paper_figures\tables\table_number_owners_and_area_in_company_networks.csv"
     # )
 
-    # table_change_in_concentration_measures(
-    #     cm_omerge_grid_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-owner_merge-iacs_areas.csv",
-    #     cm_mcomp_grid_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
-    #     cm_omerge_state_pth=rf"11_ownership_concentration\state\state_conc_meas-owner_merge-iacs_areas.csv",
-    #     cm_mcomp_state_pth=rf"11_ownership_concentration\state\state_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
-    #     out_pth=rf"14_paper_figures\tables\table_change_in_concentration_measures.csv"
-    # )
-    #
     # fig_presentation_avg_area(
     #         owner_df_pth=OWNER_DF_FOR_PLOTTING,
     #         threshold=50,
@@ -1728,12 +1728,12 @@ def main():
     #     municip_shp_pth=MUNICIP_SHP_PTH,
     #     out_pth=r"14_paper_figures\figures\fig_comparison_histograms_concentrations_measures_only_non-agricultural_people.png"
     # )
-    #
+
     # fig_stacked_lorenz_curve(
     #     owner_df_pth=OWNER_DF_FOR_PLOTTING,
     #     threshold=50,
     #     out_pth=rf"14_paper_figures\figures\stacked_lorenz_curve.png")
-    #
+
     # table_brandenburg_owners(
     #     owner_df_pth=OWNER_DF_FOR_PLOTTING,
     #     threshold=50,

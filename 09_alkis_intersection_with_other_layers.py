@@ -128,7 +128,7 @@ def cut_alkis_shp_with_grid_or_iacs(alkis_pth, grid_pth, out_pth, keep_cols_grid
     :param alkis_pth: Path to shapefile with parcel geometries from ALKIS.
     :param grid_pth: Path to grid or other polygon layer that should be used for the overlay
     :param keep_cols_grid: Columns to keep from the grid layer.
-    :param keep_cols_alkis: Columns to keept from ALKIS.
+    :param keep_cols_alkis: Columns to keep from ALKIS.
     :param shape_parameters: needs to be a dictionary with "thin_ratio" and "area_thresh" as keys and float as values to clean the intersected layer.
     :param overlay_option: Option to use for geopandas overlay. Default is intersection.
     :param out_pth: Output path to overlayed ALKIS-grid shapefile.

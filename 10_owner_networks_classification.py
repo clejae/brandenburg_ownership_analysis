@@ -348,6 +348,8 @@ def derive_community_information_from_dafne_data(dafne_pth, info_dict_pth, comm_
     print("\tGet main descriptors.")
     df_stat["main_words"] = df_stat["all_descr"].apply(get_main_descriptors)
 
+    df_stat
+
     print("\tWrite out")
     df_stat.to_csv(out_pth, index=False)
 
@@ -1017,14 +1019,14 @@ def main():
         #     out_pth=OWNERS_W_THRESH_REDUCED_PTH.format(threshold)
         # )
 
-        # derive_community_information_from_dafne_data(
-        #     dafne_pth=COMMUNITY_DAFNE_CSV_W_THRESH.format(threshold),
-        #     info_dict_pth=COMMUNITY_INFO_DICT_W_THRESH.format(threshold),
-        #     comm_col=comm_col,
-        #     net_branch_pth=NETW_BRANCH_PTH,
-        #     stopword_lst_pth=STOPWORD_LIST,
-        #     out_pth=COMMUNITY_INFO_FROM_DAFNE_W_THRESH.format(threshold)
-        # )
+        derive_community_information_from_dafne_data(
+            dafne_pth=COMMUNITY_DAFNE_CSV_W_THRESH.format(threshold),
+            info_dict_pth=COMMUNITY_INFO_DICT_W_THRESH.format(threshold),
+            comm_col=comm_col,
+            net_branch_pth=NETW_BRANCH_PTH,
+            stopword_lst_pth=STOPWORD_LIST,
+            out_pth=COMMUNITY_INFO_FROM_DAFNE_W_THRESH.format(threshold)
+        )
 
         # classify_communities_from_info_dict(
         #     info_dict_pth=COMMUNITY_INFO_DICT_W_THRESH.format(threshold),
