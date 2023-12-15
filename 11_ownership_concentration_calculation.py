@@ -420,14 +420,14 @@ def main():
     parcels = gpd.read_file(ALKIS_IACS_GRID_PTH.format(grid_res, version_4km))
     parcels["area"] = parcels["geometry"].area
 
-    prepare_moving_window_calculation(
-        gdf_alk=parcels.loc[parcels["BTNR"].notna()],
-        grid_4km_with_12km_ids_pth=GRID_4km_WITH_12KM_IDS_PTH,
-        out_pth=DICT_4KM_TO_12KM_IDS
-    )
+    # prepare_moving_window_calculation(
+    #     gdf_alk=parcels.loc[parcels["BTNR"].notna()],
+    #     grid_4km_with_12km_ids_pth=GRID_4km_WITH_12KM_IDS_PTH,
+    #     out_pth=DICT_4KM_TO_12KM_IDS
+    # )
 
     ## On all IACS areas for company networks
-    cols = ["gini_coeff", "cr1", "cr3", "cr5", "hhi", "total_area", "num_owners", "lac", "palma_v1", "palma_v2",
+    cols = ["gini_coeff", "cr1", "cr3", "cr4", "cr5", "hhi", "total_area", "num_owners", "lac", "palma_v1", "palma_v2",
             "rosenbluth_index", "share_p100", "share_p95_99", "share_v19", "share_m50", "share_b40"]
 
     descr = f"mother_companies-comm_w_thr{threshold}-iacs_areas"
@@ -443,9 +443,9 @@ def main():
         conc_measures_at_mw_grid_combined_mcomp_pth=CONC_MEASURES_MW_GRID_COMBINED_PTH,
         grid_4km_with_12km_ids_pth=GRID_4km_WITH_12KM_IDS_PTH,
         conc_cols=cols,
-        counts_grid_versions_pth=COUNT_CATEG_MW_GRID_VERSIONS_PTH,
-        shares_grid_versions_pth=SHARE_CATEG_MW_GRID_VERSIONS_PTH,
-        shares_grid_combined_pth=SHARE_CATEG_MW_GRID_COMBINED_PTH,
+        # counts_grid_versions_pth=COUNT_CATEG_MW_GRID_VERSIONS_PTH,
+        # shares_grid_versions_pth=SHARE_CATEG_MW_GRID_VERSIONS_PTH,
+        # shares_grid_combined_pth=SHARE_CATEG_MW_GRID_COMBINED_PTH,
         category_col="new_category"
         # counts_grod_combined_pth=COUNT_CATEG_MW_GRID_COMBINED_PTH
     )

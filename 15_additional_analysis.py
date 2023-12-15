@@ -13,7 +13,14 @@ import matplotlib
 import math
 import seaborn as sns
 import networkx as nx
+import json
 from community import community_louvain
+
+from collections import defaultdict
+import networkx as nx
+import plotly.graph_objects as go
+from typing import Any, List, Dict, Tuple, Union, Callable
+
 
 import helper_functions
 import plotting_lib
@@ -23,16 +30,24 @@ os.chdir(WD)
 
 ## Input:
 NETW_COMM_PTH = r"08_network_analysis\network_connections_with_community.csv"
+COMMUNITY_MAX_DIST_DICT_PTH = r"08_network_analysis\community{0}_max_dist_dict.json"
+OWNERS_W_THRESH_PTH = r"10_owner_network_classification\10_owners_stretched+comm_w_thr{0}-dist+cleaned+loc+class.csv"
+OWNER_DF_FOR_PLOTTING = r"14_paper_figures\14_owners_w_parcels+comm_w_thr{0}.csv"
+ALK_IACS_INTERS_PTH = r"09_alkis_intersection_with_other_layers\alkis_iacs_inters.shp"
+BB_SHP = r"00_data\vector\administrative\BB_municipalities.shp"
+CONC_MEASURES_MW_GRID_VERSIONS_PTH = r"11_ownership_concentration\mw_grid_buffers\mw_conc_meas-{0}.csv"
+#r"11_ownership_concentration\mw_grid\mw_mean_conc_meas-{0}.csv"
+#,
 
 ## Output:
-OWNER_DF_FOR_PLOTTING = r"14_paper_figures\14_owners_w_parcels+comm_w_thr{0}.csv"
-OWNERS_W_THRESH_PTH = r"10_owner_network_classification\10_owners_stretched+comm_w_thr{0}-dist+cleaned+loc+class.csv"
+OUT_SHP_FOLDER_W_THRESH = r"15_additional_analysis\largest_owners\_vector"
+OUT_FIG_FOLDER_W_THRESH = r"15_additional_analysis\largest_owners\_community_distribution"
+
 
 ## Other output paths are defined in the functions below in this script.
 
 
 ## ------------------------------------------ DEFINE FUNCTIONS ------------------------------------------------#
-
 def owner_origin_statistics():
     helper_functions.create_folder("15_additional_analysis\owner_origins")
 
@@ -241,6 +256,243 @@ def save_network_members_to_df(df, df_areas, community_column, community_id, out
         df3.to_excel(writer, sheet_name='members_with_land', index=False)
 
 
+def create_graph_from_df(df):
+    function_to_color = {"Aktionär":  "#ffeda0",  # gelb
+                         "Aufsichtsrat":  "#0f0f0f",  # grau
+                         "Geschäftsführender Direktor":  "#a1d99b",  # grün
+                         "Geschäftsführer":  "#a1d99b",  # grün
+                         "Gesellschafter":  "#feb24c",  # orange
+                         "Kommanditaktionär":  "#ffeda0",  # gelb
+                         "Kommanditist":  "#feb24c",  # orange
+                         "Komplementär":  "#feb24c",  # orange
+                         "Liquidator":  "#0f0f0f",  # grau
+                         "mother company":  "#f03b20",  # darkorange
+                         "persönlich haftender Gesellschafter":  "#feb24c",  # orange
+                         "Prokurist":  "#0f0f0f",  # grau
+                         "subsidary":  "#f03b20",  # darkorange
+                         "Verwaltungsrat":  "#0f0f0f",  # grau
+                         "Vorstand":  "#0f0f0f"}  # grau
+
+    df["color"] = df["function"].map(function_to_color)
+    df["conn_right"] = df["conn_right"].apply(lambda x: x.split('_')[0])
+    df["conn_left"] = df["conn_left"].apply(lambda x: x.split('_')[0])
+
+    Graph = nx.from_pandas_edgelist(df=df, source="conn_right", target="conn_left", edge_attr=["color", "function", "share"])
+
+    return Graph
+
+
+def draw_network(Graph, debug=False):
+
+    ## All this was found at https://towardsdatascience.com/visualizing-networks-in-python-d70f4cbeb259
+    import dash
+    import visdcc
+    import dash_core_components as dcc
+    import dash_html_components as html
+    from dash.dependencies import Input, Output
+
+
+    #########################################################################################################
+
+    ## create app
+    app = dash.Dash()
+
+    nodes = [{'id': node_name, 'label': node_name, 'shape': 'dot', 'size': 7} for i, node_name in enumerate(Graph.nodes)]
+    ## create edges from df
+    function_to_color = {"Aktionär": "yellow", # "#ffeda0",  # gelb
+                         "Aufsichtsrat": "grey", # "#bdbdbd",  # grau
+                         "Geschäftsführender Direktor": "green", #" "#a1d99b",  # grün
+                         "Geschäftsführer": "green", # "#a1d99b",  # grün
+                         "Gesellschafter": "orange", #" "#feb24c",  # orange
+                         "Kommanditaktionär": "yellow", # "#ffeda0",  # gelb
+                         "Kommanditist": "orange", #" "#feb24c",  # orange
+                         "Komplementär": "orange", # "#feb24c",  # orange
+                         "Liquidator": "grey", # "#bdbdbd",  # grau
+                         "mother company": "orange", # "#f03b20",  # darkorange
+                         "persönlich haftender Gesellschafter": "orange", #" "#feb24c",  # orange
+                         "Prokurist": "grey", # "#bdbdbd",  # grau
+                         "subsidary": "orange", #" "#f03b20",  # darkorange
+                         "Verwaltungsrat": "grey", # "#bdbdbd",  # grau
+                         "Vorstand": "grey"} #" "#bdbdbd"}  # grau
+    edges = []
+    for edge in Graph.edges:
+        source, target = edge
+        weight = Graph[source][target]["share"]
+        function = Graph[source][target]["function"]
+        color = function_to_color.get(function, "grey")
+        edges.append({
+            "id": source + '__' + target,
+            "edge_label": weight,
+            "from": source,
+            "to": target,
+            "width": weight / 10 + 1,
+            "color": color
+        })
+
+    ## app.layout is what specifies how your Dash app looks
+    app.layout = html.Div([
+        visdcc.Network(id='net',
+                       data={'nodes': nodes, 'edges': edges},
+                       options=dict(height='800px', width='100%'))
+    ])
+
+    ## define callback
+    ## allows your graph to be interactive and listen to user events such as click or selection
+    @app.callback(
+        Output('net', 'options'),
+        [Input('color', 'value')])
+    def myfun(selection):
+        if selection:
+            selected_node = selection.get('nodes', [None])[0]
+            if selected_node:
+                return {'nodes': {'borderWidthSelected': 5}}
+        return {}
+
+    app.run_server(debug=debug)
+    # app.run_server(host='0.0.0.0', port=8050, debug=True)
+    # app.run_server(host='0.0.0.0', debug=True)
+
+
+def plot_concentration_histogramm_per_owner(alkis_iacs_inters_pth, df_conc_pth, owners_pth, bb_shp_pth, comm_col, community_lst, out_shp_folder, out_fig_folder):
+
+    print("Combine parcels with owner data")
+    gdf = gpd.read_file(alkis_iacs_inters_pth)
+    gdf["area"] = gdf["geometry"].area
+    gdf['area'] = gdf['area'] / 10000
+    df = helper_functions.read_table_to_df(owners_pth)
+
+    grid_res = 4
+    version_4km = 1
+    gdf_grid = gpd.read_file(rf"00_data\vector\grids\square_grid_{grid_res}km_v{version_4km:02d}_with_12km_POLYIDs.shp")
+    df_conc = pd.read_csv(df_conc_pth)
+
+    gdf_conc = pd.merge(gdf_grid, df_conc, how='inner', left_on='POLYID', right_on='id_sp_unit')
+
+    df_alk = helper_functions.combine_parcels_with_owners(
+        gdf[["OGC_FID", "EIGENTUEME", "BTNR", "area", "geometry"]],
+        df[["OGC_FID", "mother_company", "owner_merge", "level_c_category", comm_col]])
+
+    df_alk = gpd.GeoDataFrame(df_alk)
+
+    out_lst = [["mother_company", "comm", "min", "mean", "max"]]
+
+    for i, comm in enumerate(community_lst):
+        sub = df_alk.loc[df_alk[comm_col] == comm].copy()
+
+        gdf_conc_touch = gpd.sjoin(gdf_conc, sub, op='intersects')
+        df_plt = gdf_conc.loc[gdf_conc["POLYID"].isin(gdf_conc_touch["POLYID"].unique())].copy()
+
+        # helper_functions.create_folder(out_shp_folder)
+        # out_shp_pth = f"{out_shp_folder}/community_{comm}_hexagons.shp"
+        # if not os.path.exists(out_shp_pth):
+        #     sub.to_file(out_shp_pth)
+
+        mother_company = sub["mother_company"].iloc[0]
+
+        shp_bb = gpd.read_file(bb_shp_pth)
+
+        folder = f"{out_fig_folder}/{i:02}_community"
+
+        helper_functions.create_folder(folder)
+        out_fig_pth = f"{folder}/{i:02}_community_{comm}_hexagons.png"
+
+        fig, axs = plt.subplots(nrows=1, ncols=1, figsize=plotting_lib.cm2inch(12, 12))
+        shp_bb.plot(edgecolor='none', facecolor='#bebebe', ax=axs, zorder=0)
+        df_plt.plot(edgecolor='none', facecolor='#0000FF', ax=axs, zorder=1)
+        fig.suptitle(f'{comm}_{mother_company}', fontsize=9)
+        plt.savefig(out_fig_pth, dpi=300)
+        plt.close()
+
+        plotting_lib.histogramm(
+            df=df_plt,
+            col="cr1",
+            out_pth=f"{folder}/{i:02}_community_{comm}_histogramm.png"
+        )
+
+        sub_lst = [mother_company, comm, df_plt["cr1"].min(), df_plt["cr1"].mean(), df_plt["cr1"].max()]
+        out_lst.append(sub_lst)
+
+    df_out = pd.DataFrame(out_lst)
+    df_out.to_csv(f"{out_fig_folder}/cr1_statistics.csv")
+
+def get_largest_owners_in_concentrated_areas(df_conc_pth, df_conc_pth_v, conc_col, thresh_min, thresh_max=-9999):
+
+    ## Read grid shapefiles
+    grid_res = 4
+    version_4km = 1
+    gdf_grid = gpd.read_file(rf"00_data\vector\grids\square_grid_{grid_res}km_v{version_4km:02d}_with_12km_POLYIDs.shp")
+
+    ## Read mean concentration measures
+    df_conc = pd.read_csv(df_conc_pth)
+
+    ## Read concentration measures of grid version 5 to identify the largest owner per grid cell
+    df_top_owner = pd.read_csv(df_conc_pth_v)
+
+    ## read 4km to 12km polyid dictionary
+    owner_names = []
+    for version in range(1, 10):
+        target_unit_id_col = f"v{version:02d}_POLYID"
+
+        ## Combine dataframes
+        gdf_conc = pd.merge(gdf_grid, df_conc, how='inner', left_on='POLYID', right_on='POLYID')
+        gdf_conc = pd.merge(gdf_conc, df_top_owner[['id_sp_unit', 'owner1']], how='left', left_on=target_unit_id_col,
+                            right_on="id_sp_unit")
+
+        if thresh_max == -9999:
+            thresh_max = gdf_conc[conc_col].max()
+
+        gdf_conc2 = gdf_conc.loc[(gdf_conc[conc_col] > thresh_min) & (gdf_conc[conc_col] <= thresh_max)].copy()
+
+        temp_lst = list(gdf_conc2["owner1"].unique())
+        owner_names += temp_lst
+
+    owner_names = [name for name in owner_names if type(name) == str]
+
+    return set(list(owner_names))
+
+
+def get_largest_share_of_specific_owner_from_mw_calculation(conc_of_grid_version_pth, threshold, owner_name, out_pth=None, descr=None):
+    grid_res = 4
+
+    res_lst = []
+    for version in range(1, 10):
+        id_col = f"v{version:02d}_POLYID"
+        if not descr:
+            pth = conc_of_grid_version_pth.format(grid_res, version, threshold)
+        else:
+            pth = conc_of_grid_version_pth.format(grid_res, version, descr)
+
+        df = pd.read_csv(pth, sep=',')
+
+        df_sub = df.loc[df['owner1'] == owner_name].copy()
+
+        if not df_sub.empty:
+            df_sub["version"] = f"v{version:02d}"
+            res_lst.append(df_sub)
+
+    if res_lst:
+        df_res = pd.concat(res_lst)
+
+        if out_pth:
+            df_res.to_csv(out_pth)
+
+        return df_res
+
+
+def get_largest_share_of_specific_owner_from_mw_12km_buffers(conc_pth, threshold, owner_name, out_pth=None):
+    grid_res = 4
+
+    pth = conc_pth.format(grid_res, threshold)
+
+    df = pd.read_csv(pth, sep=',')
+    df_sub = df.loc[df['owner1'] == owner_name].copy()
+
+    if out_pth:
+        df_sub.to_csv(out_pth)
+
+    if not df_sub.empty:
+        return df_sub
+
 ## ------------------------------------------ RUN PROCESSES ---------------------------------------------------#
 def main():
     s_time = time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime())
@@ -252,39 +504,111 @@ def main():
     #################################### Visualization of network areas and network compositions ########################
     df = pd.read_csv(NETW_COMM_PTH)
     thresh = 50
-    df_areas = pd.read_csv(OWNERS_W_THRESH_PTH.format(thresh), sep=";")
+    # df_areas = pd.read_csv(OWNERS_W_THRESH_PTH.format(thresh), sep=";")
     helper_functions.create_folder(r"15_additional_analysis\largest_owners")
 
-    ## Examples
-    names = ['lindhorst', 'gross neuendorf-letschin eg', 'bioboden genossenschaft eg', 'christian olearius_hamburg', 'frank gross']
+    with open(COMMUNITY_MAX_DIST_DICT_PTH.format(thresh)) as json_file:
+        no_layers_dict = json.load(json_file)
 
-    for name in names:
-        out_folder = fr"15_additional_analysis\largest_owners\{name}"
-        helper_functions.create_folder(out_folder)
+    ## Plot histograms of grid cells in which the largest owners are active
+    df_largest_owners = pd.read_csv(r"13_general_statistics\ALKIS_IACS_intersection\area_per_community_w_thr50_alkis_iacs.csv")
+    comm_col = f"community_{thresh}"
+    community_lst = list(df_largest_owners[comm_col][:30])
+    owner_lst = list(df_largest_owners['mother_company'][:16])
+    owner_lst.remove('unbekannt')
+    descr = f"mother_companies-comm_w_thr50-iacs_areas"
 
-        ## Get community numbers for company name and plot
-        comm_numbers = get_community_id_of_company(
-            df=df,
-            name=name,
-            comm_column="community_50"
-        )
-        comm_numbers = list(set(comm_numbers))
-        comm_numbers = [i for i in comm_numbers if not pd.isna(i)]
-        for comm_number in comm_numbers:
-            plot_network_graph_of_community_from_df(
-                df=df,
-                community_column="community_50",
-                community_id=comm_number,
-                out_pth=fr"{out_folder}\{name}_main_community_{comm_number}.png"
-            )
-            save_network_members_to_df(
-                df=df,
-                df_areas=df_areas,
-                community_column="community_50",
-                community_id=comm_number,
-                out_pth=fr"{out_folder}\{name}_main_community_{comm_number}.xlsx")
+    # plot_concentration_histogramm_per_owner(
+    #     alkis_iacs_inters_pth=ALK_IACS_INTERS_PTH,
+    #     df_conc_pth=CONC_MEASURES_MW_GRID_VERSIONS_PTH.format(descr),
+    #     owners_pth=OWNERS_W_THRESH_PTH.format(thresh),
+    #     bb_shp_pth=BB_SHP,
+    #     comm_col=comm_col,
+    #     community_lst=community_lst,
+    #     out_shp_folder=OUT_SHP_FOLDER_W_THRESH,
+    #     out_fig_folder=OUT_FIG_FOLDER_W_THRESH
+    # )
 
+    res_lst = []
+    for i, owner in enumerate(owner_lst):
+        res = get_largest_share_of_specific_owner_from_mw_12km_buffers(
+            conc_pth=CONC_MEASURES_MW_GRID_VERSIONS_PTH.format(descr),
+            threshold=thresh,
+            owner_name=owner)
+        if isinstance(res, pd.DataFrame):
+            res["rank"] = i+1
+            res_lst.append(res)
 
+    res_df = pd.concat(res_lst)
+    res_df.to_csv(fr"{OUT_FIG_FOLDER_W_THRESH}\polygons_largest_15_owners.csv", index=False)
+    # summary = res_df[["owner1", "rank", "cr1", "cr4", "gini_coeff", "hhi"]].groupby(['owner1', 'rank']).describe().reset_index()
+    # summary.sort_values(by='rank', inplace=True)
+    # summary.to_csv(fr"{OUT_FIG_FOLDER_W_THRESH}\concentrations_largest_30_owners.csv", index=False)
+
+    ## Get largest owners in most concentrated areas
+    # descr = f"mother_companies-comm_w_thr50-iacs_areas"
+    # owner_names = get_largest_owners_in_concentrated_areas(
+    #     df_conc_pth=CONC_MEASURES_MW_GRID_VERSIONS_PTH.format(descr),
+    #     df_conc_pth_v=rf"11_ownership_concentration\mw_grid\mw_conc_meas-grid_4km_v05-{descr}.csv",
+    #     conc_col="cr1",
+    #     thresh_min=30,
+    #     thresh_max=70)
+    #
+    # print("Owners in areas with CR1 larger than 30:", owner_names)
+    #
+    # descr = f"mother_companies-comm_w_thr50-iacs_areas"
+    # owner_names = get_largest_owners_in_concentrated_areas(
+    #     df_conc_pth=CONC_MEASURES_MW_GRID_VERSIONS_PTH.format(descr),
+    #     df_conc_pth_v=rf"11_ownership_concentration\mw_grid\mw_conc_meas-grid_4km_v05-{descr}.csv",
+    #     conc_col="cr1",
+    #     thresh_min=25,
+    #     thresh_max=30)
+    #
+    # print("Owners in areas with CR1 between 25 amd 30:", owner_names)
+    #
+    # # ## Examples
+    # # # 'lindhorst', 'gross neuendorf-letschin eg', 'bioboden genossenschaft eg', 'christian olearius_hamburg', 'frank gross'
+    # # # 'karsten alexander maria laubrock', 'bernd schmidt-ankum_glebitzsch', 'janine stratmann_nordwestuckermark', 'antje winkelmann'
+    # # # 'muenchener rueckversicherungs-gesellschaft aktiengesellschaft in muenchen'
+    #
+    # names = ['werner kotzte']
+    #
+    # for name in names:
+    #     out_folder = fr"15_additional_analysis\largest_owners\{name}"
+    #     helper_functions.create_folder(out_folder)
+    #
+    #     ## Get community numbers for company name and plot
+    #     comm_numbers = get_community_id_of_company(
+    #         df=df,
+    #         name=name,
+    #         comm_column="community_50"
+    #     )
+    #
+    #     comm_numbers = list(set(comm_numbers))
+    #     comm_numbers = [i for i in comm_numbers if not pd.isna(i)]
+    #
+    #     for comm_number in comm_numbers:
+    #
+    #         plot_network_graph_of_community_from_df(
+    #             df=df,
+    #             community_column="community_50",
+    #             community_id=comm_number,
+    #             out_pth=fr"{out_folder}\{name}_main_community_{comm_number}.png"
+    #         )
+    #
+    #         save_network_members_to_df(
+    #             df=df,
+    #             df_areas=df_areas,
+    #             community_column="community_50",
+    #             community_id=comm_number,
+    #             out_pth=fr"{out_folder}\{name}_main_community_{comm_number}.xlsx")
+    #
+    #         no_layers = no_layers_dict[comm_number]
+    #         print(f"Number of layers in network: {no_layers}")
+    #
+    #         Graph = create_graph_from_df(df.loc[df["community_50"] == comm_number].copy())
+    #         ## This does not work in debug mode of PyCharm
+    #         draw_network(Graph=Graph)
 
     e_time = time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime())
     print("start: " + s_time)

@@ -197,6 +197,7 @@ def calculate_concentration_measures_from_df(df, target_unit_id_col, area_col, o
         # "num_parcels": [],
         "cr1": [],
         "cr3": [],
+        "cr4": [],
         "cr5": [],
         "hhi": [],
         "rosenbluth_index": [],
@@ -277,6 +278,7 @@ def calculate_concentration_measures_from_df(df, target_unit_id_col, area_col, o
 
             cr1 = round((agg[-1:]['area'].sum() / total_area) * 100, 2)
             cr3 = round((agg[-3:]['area'].sum() / total_area) * 100, 2)
+            cr4 = round((agg[-4:]['area'].sum() / total_area) * 100, 2)
             cr5 = round((agg[-5:]['area'].sum() / total_area) * 100, 2)
 
             share1 = round((agg['area'].iloc[-1] / total_area) * 100, 2)
@@ -299,6 +301,7 @@ def calculate_concentration_measures_from_df(df, target_unit_id_col, area_col, o
             # out_dict["num_parcels"].append(num_parcels)
             out_dict["cr1"].append(cr1)
             out_dict["cr3"].append(cr3)
+            out_dict["cr4"].append(cr4)
             out_dict["cr5"].append(cr5)
             out_dict["hhi"].append(hhi)
             out_dict["rosenbluth_index"].append(rbi)

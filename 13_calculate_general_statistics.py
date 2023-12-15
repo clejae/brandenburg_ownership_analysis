@@ -30,11 +30,14 @@ BB_SHP = r"00_data\vector\administrative\BB_municipalities.shp"
 OWNERS_W_THRESH_PTH = r"10_owner_network_classification\10_owners_stretched+comm_w_thr{0}-dist+cleaned+loc+class.csv"
 COMMUNITY_INFO_DICT_W_THRESH = r"08_network_analysis\owners+communities_thr{0}\08_alkis_owners_comm_thr{0}_info_dict.json"
 
+CONC_MEASURES_MW_GRID_VERSIONS_PTH = r"11_ownership_concentration\mw_grid\mw_mean_conc_meas-{0}.csv"
+
 ## Output
 ## A) Area calculation on original data
 IACS_STATISTICS_OUT_PTH = r"13_general_statistics\13_area_information_iacs.xlsx"
 ALKIS_OUT_PTH = r"13_general_statistics\13_area_information_alkis+comm_thr{0}_iacs_intersection.xlsx"
 ALKIS_ORIG_OUT_PTH = r"13_general_statistics\13_area_information_alkis_original.csv"
+ALKIS_PREPR_OUT_PTH = r"13_general_statistics\13_area_information_alkis_pre-processed.xlsx"
 
 ## B) Area calculation per owner or community
 AREA_PER_OWN_PTH = rf"13_general_statistics\ALKIS_IACS_intersection\area_per_owner_merge_alkis_iacs.csv"
@@ -153,7 +156,7 @@ def calculate_alkis_area_statistics_wrapper(alkis_iacs_inters_pth, owners_pth, o
     # Combine parcels with owner data
     df_comb = helper_functions.combine_parcels_with_owners(
         gdf[["OGC_FID", "area"]],
-        df[["OGC_FID", "mother_company", "owner_merge"]]
+        df[["OGC_FID", "mother_company", "owner_merge", "new_category"]]
     )
 
     # Calculate area per owner merge category
@@ -261,8 +264,102 @@ def calculate_original_alkis_statistics_wrapper(alkis_pth, stats_out_pth):
     )
 
     # Write out the calculated statistics to a CSV file.
-    print("Write out the calculated statistics to a CSV file.")
     df_stats.to_csv(stats_out_pth)
+
+
+def calculate_preprocessed_alkis_statistics_wrapper(alkis_pth, owners_pth, comm_col, stats_out_pth):
+    """
+    Calculate statistics about original ALKIS data and owner entries.
+
+    Args:
+        alkis_pth (str): File path to the ALKIS data.
+        stats_out_pth (str): File path for the output statistics CSV.
+
+    Returns:
+        None
+    """
+    print("Generate statistics about pre-processed ALKIS data and owner entries.")
+    print("Read input data.")
+    gdf = gpd.read_file(alkis_pth)  # Read ALKIS data from the file path
+    gdf['area'] = gdf['geometry'].area  # Calculate area of each geometry
+    gdf['area'] = gdf['area'] / 10000  # Convert area to hectares
+
+    df = pd.read_csv(owners_pth, sep=';', dtype={comm_col: str})
+
+    df_alk = helper_functions.combine_parcels_with_owners(gdf[["OGC_FID", "EIGENTUEME", "area"]],
+                                                          df[["OGC_FID", "mother_company", "owner_clean", "owner_merge",
+                                                              "new_category",  "level1", comm_col]])
+
+    # Set level column to "1" for all rows.
+    print("Set level column to '1' for all rows.")
+    df_alk['level_overall'] = "1"
+
+    # Create private owners class
+    df_alk['level_private_person'] = "0"
+    df_alk.loc[df_alk['new_category'].isin(["noagPR", "agriPR"]), 'level_private_person'] = "1"
+
+    # Calculate overall statistics.
+    print("Calculate overall statistics.")
+    df_stats = create_overall_stats_per_level(
+        input_df=df_alk,  # Input data frame
+        level_col="level_overall",  # Level column
+        area_col='area',  # Area column
+        fid_col='OGC_FID',  # Feature ID column
+        owners_col="EIGENTUEME"  # Owners column
+    )
+
+    # Calculate overall statistics.
+    print("Calculate statistics for 'new category'.")
+    df_stats2 = create_overall_stats_per_level(
+        input_df=df_alk,  # Input data frame
+        level_col="new_category",  # Level column
+        area_col='area',  # Area column
+        fid_col='OGC_FID',  # Feature ID column
+        owners_col="mother_company"  # Owners column
+    )
+
+    # Calculate overall statistics.
+    print("Calculate statistics for private persons.")
+    df_stats3 = create_overall_stats_per_level(
+        input_df=df_alk,  # Input data frame
+        level_col="level_private_person",  # Level column
+        area_col='area',  # Area column
+        fid_col='OGC_FID',  # Feature ID column
+        owners_col="mother_company"  # Owners column
+    )
+
+    # no families together
+    df_stats4 = create_overall_stats_per_level(
+        input_df=df_alk,  # Input data frame
+        level_col="level_private_person",  # Level column
+        area_col='area',  # Area column
+        fid_col='OGC_FID',  # Feature ID column
+        owners_col="owner_clean"  # Owners column
+    )
+
+    # Calculate overall statistics.
+    print("Calculate statistics for 'level1'.")
+    df_stats5 = create_overall_stats_per_level(
+        input_df=df_alk,  # Input data frame
+        level_col="level1",  # Level column
+        area_col='area',  # Area column
+        fid_col='OGC_FID',  # Feature ID column
+        owners_col="owner_clean"  # Owners column
+    )
+
+    # Write out the calculated statistics to a CSV file.
+    # df_stats.to_csv(stats_out_pth)
+
+    # Write out the calculated statistics to a XLSX file.
+    print("Write out the calculated statistics to a XLSX file.")
+    with pd.ExcelWriter(stats_out_pth, engine='openpyxl') as writer:
+        # Write each DataFrame to a different sheet
+        df_stats.to_excel(writer, sheet_name='overall', index=False)
+        df_stats2.to_excel(writer, sheet_name='new_category', index=False)
+        df_stats3.to_excel(writer, sheet_name='private_persons_families', index=False)
+        df_stats4.to_excel(writer, sheet_name='private_persons_separate', index=False)
+        df_stats5.to_excel(writer, sheet_name='level1', index=False)
+
 
 
 def calculate_area_per_community(alkis_iacs_inters_pth, owners_pth, comm_info_dict_pth, area_per_community_out_pth,
@@ -420,6 +517,63 @@ def plot_distribution_of_parcels_per_owner(alkis_iacs_inters_pth, owners_pth, bb
         plt.close()
 
 
+def plot_concentration_histogramm_per_owner(alkis_iacs_inters_pth, df_conc_pth, owners_pth, bb_shp_pth, comm_col, community_lst, out_shp_folder, out_fig_folder):
+
+    print("Combine parcels with owner data")
+    gdf = gpd.read_file(alkis_iacs_inters_pth)
+    gdf["area"] = gdf["geometry"].area
+    gdf['area'] = gdf['area'] / 10000
+    df = helper_functions.read_table_to_df(owners_pth)
+
+    grid_res = 4
+    version_4km = 1
+    gdf_grid = gpd.read_file(rf"00_data\vector\grids\square_grid_{grid_res}km_v{version_4km:02d}_with_12km_POLYIDs.shp")
+    df_conc = pd.read_csv(df_conc_pth)
+
+    gdf_conc = pd.merge(gdf_grid, df_conc, how='inner', left_on='POLYID', right_on='POLYID')
+
+    df_alk = helper_functions.combine_parcels_with_owners(
+        gdf[["OGC_FID", "EIGENTUEME", "BTNR", "area", "geometry"]],
+        df[["OGC_FID", "mother_company", "owner_merge", "level_c_category", comm_col]])
+
+    df_alk = gpd.GeoDataFrame(df_alk)
+
+    for i, comm in enumerate(community_lst):
+        sub = df_alk.loc[df_alk[comm_col] == comm].copy()
+
+        gdf_conc_touch = gpd.sjoin(gdf_conc, sub, op='intersects')
+        df_plt = gdf_conc.loc[gdf_conc["POLYID"].isin(gdf_conc_touch["POLYID"].unique())].copy()
+
+        helper_functions.create_folder(out_shp_folder)
+        out_shp_pth = f"{out_shp_folder}/community_{comm}_hexagons.shp"
+        if not os.path.exists(out_shp_pth):
+            sub.to_file(out_shp_pth)
+
+        mother_company = sub["mother_company"].iloc[0]
+
+        shp_bb = gpd.read_file(bb_shp_pth)
+
+        folder = f"{out_fig_folder}/{i:02}_community"
+
+        helper_functions.create_folder(folder)
+        out_fig_pth = f"{folder}/{i:02}_community_{comm}_hexagons.png"
+
+        fig, axs = plt.subplots(nrows=1, ncols=1, figsize=plotting_lib.cm2inch(12, 12))
+        shp_bb.plot(edgecolor='none', facecolor='#bebebe', ax=axs, zorder=0)
+        df_plt.plot(edgecolor='none', facecolor='#0000FF', ax=axs, zorder=1)
+        fig.suptitle(f'{comm}_{mother_company}', fontsize=9)
+        plt.savefig(out_fig_pth, dpi=300)
+        plt.close()
+
+        plotting_lib.histogramm(
+            df=df_plt,
+            col="cr1",
+            out_pth=f"{folder}/{i:02}_community_{comm}_histogramm.png"
+        )
+
+
+
+
 ## ------------------------------------------ RUN PROCESSES ---------------------------------------------------#
 def main():
     stime = time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime())
@@ -442,41 +596,48 @@ def main():
         print(threshold)
         comm_col = f"community_{threshold}"
 
-        # ## Calulate general statistics from ALKIS
+        # ## Calulate general statistics from original ALKIS
         # calculate_alkis_area_statistics_wrapper(
         #     alkis_iacs_inters_pth=ALK_IACS_INTERS_PTH,
         #     owners_pth=OWNERS_W_THRESH_PTH.format(threshold),
         #     out_pth=ALKIS_OUT_PTH.format(threshold))
 
+        ## Calulate general statistics from pre-processed ALKIS
+        # calculate_preprocessed_alkis_statistics_wrapper(
+        #     alkis_pth=ALK_IACS_INTERS_PTH,
+        #     owners_pth=OWNERS_W_THRESH_PTH.format(threshold),
+        #     comm_col=comm_col,
+        #     stats_out_pth=ALKIS_PREPR_OUT_PTH.format(threshold))
+
         # Calculate area
-        print("#####################################################\n "
-              "Community IDs WITH threshold. +  ALKIS intersected with IACS data\n "
-              "#####################################################")
-
-        calculate_area_per_community(
-            alkis_iacs_inters_pth=ALK_IACS_INTERS_PTH,
-            owners_pth=OWNERS_W_THRESH_PTH.format(threshold),
-            comm_info_dict_pth=COMMUNITY_INFO_DICT_W_THRESH.format(threshold),
-            area_per_community_out_pth=AREA_PER_COMM_W_THRESH.format(threshold),
-            comm_col=comm_col)
-            # area_per_owner_out_pth=AREA_PER_OWN_PTH.format(threshold))
-
-        print("... only looking at private land (excluding public and church land).")
-        calculate_area_per_community(
-            alkis_iacs_inters_pth=ALK_IACS_INTERS_PTH,
-            owners_pth=OWNERS_W_THRESH_PTH.format(threshold),
-            comm_info_dict_pth=COMMUNITY_INFO_DICT_W_THRESH.format(threshold),
-            area_per_community_out_pth=AREA_PER_COMM_W_THRESH_EXCL_PUBL_CHURCH_PTH.format(threshold),
-            comm_col=comm_col,
-            area_per_owner_out_pth=AREA_PER_OWN_PTH_EXCL_PUBL_CHURCH_PTH.format(threshold),
-            excl_categories_dict={"column_name": "level_c_category",
-                                  "categories_to_exclude": ['4_1_1', '4_9_1', '5_1_1', '5_2_1',
-                                                            '5_2_2', '5_2_3', '5_2_4', '5_2_5',
-                                                            '5_3_1', '5_9_1']})
-
+        # print("#####################################################\n "
+        #       "Community IDs WITH threshold. +  ALKIS intersected with IACS data\n "
+        #       "#####################################################")
+        #
+        # calculate_area_per_community(
+        #     alkis_iacs_inters_pth=ALK_IACS_INTERS_PTH,
+        #     owners_pth=OWNERS_W_THRESH_PTH.format(threshold),
+        #     comm_info_dict_pth=COMMUNITY_INFO_DICT_W_THRESH.format(threshold),
+        #     area_per_community_out_pth=AREA_PER_COMM_W_THRESH.format(threshold),
+        #     comm_col=comm_col)
+        #     # area_per_owner_out_pth=AREA_PER_OWN_PTH.format(threshold))
+        #
+        # print("... only looking at private land (excluding public and church land).")
+        # calculate_area_per_community(
+        #     alkis_iacs_inters_pth=ALK_IACS_INTERS_PTH,
+        #     owners_pth=OWNERS_W_THRESH_PTH.format(threshold),
+        #     comm_info_dict_pth=COMMUNITY_INFO_DICT_W_THRESH.format(threshold),
+        #     area_per_community_out_pth=AREA_PER_COMM_W_THRESH_EXCL_PUBL_CHURCH_PTH.format(threshold),
+        #     comm_col=comm_col,
+        #     area_per_owner_out_pth=AREA_PER_OWN_PTH_EXCL_PUBL_CHURCH_PTH.format(threshold),
+        #     excl_categories_dict={"column_name": "level_c_category",
+        #                           "categories_to_exclude": ['4_1_1', '4_9_1', '5_1_1', '5_2_1',
+        #                                                     '5_2_2', '5_2_3', '5_2_4', '5_2_5',
+        #                                                     '5_3_1', '5_9_1']})
+        #
         df = pd.read_csv(AREA_PER_COMM_W_THRESH.format(threshold))
         community_lst = list(df[f"community_{threshold}"][:30])
-        # community_lst = ['0_0']
+        # # community_lst = ['0_0']
         plot_distribution_of_parcels_per_owner(
             alkis_iacs_inters_pth=ALK_IACS_INTERS_PTH,
             owners_pth=OWNERS_W_THRESH_PTH.format(threshold),
@@ -485,6 +646,8 @@ def main():
             community_lst=community_lst,
             out_shp_folder=OUT_SHP_FOLDER_W_THRESH.format(threshold),
             out_fig_folder=OUT_FIG_FOLDER_W_THRESH.format(threshold))
+
+
 
 
     etime = time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime())

@@ -848,7 +848,6 @@ def fig_share_and_location_largest_owners(df_res_pth, df_ct_pth, df_sh_pth, dist
     plt.savefig(out_pth, dpi=300)
     plt.close()
 
-
     #####
     col = "main_owner_cat"
     shp["color_main"] = shp[col].map(colour_dict)
@@ -907,7 +906,6 @@ def fig_share_and_location_largest_owners(df_res_pth, df_ct_pth, df_sh_pth, dist
     plt.close()
 
 
-
 def fig_comparison_concentrations_measures(df_res_pth, threshold, out_pth):
     grid_res = 4
     version_4km = 1
@@ -932,7 +930,7 @@ def fig_comparison_concentrations_measures(df_res_pth, threshold, out_pth):
     )
 
 
-def fig_comparison_map_and_histograms_concentration_measures(df_res_pth, threshold, district_shp_pth, out_pth):
+def fig_comparison_map_and_histograms_concentration_measures_pre_revision(df_res_pth, threshold, district_shp_pth, out_pth):
 
     print("Plot maps and histogramms of concentration measures.")
     grid_res = 4
@@ -1183,6 +1181,295 @@ def fig_comparison_map_and_histograms_concentration_measures(df_res_pth, thresho
     ax_sub.annotate(f"Mean: {round(shp[col].mean(), 2)}", (shp[col].mean(), 0.8 * max_y_val), **kw)
     ax_sub.set_ylabel(ylabel="No. polygons")
     ax_sub.set_xlabel(xlabel=label)
+    ax_sub.spines['right'].set_visible(False)
+    ax_sub.spines['top'].set_visible(False)
+    ax_sub.tick_params(labeltop=False, labelright=False)
+
+    # fig.tight_layout()
+    plt.savefig(out_pth)
+    plt.close()
+
+
+def fig_comparison_map_and_histograms_concentration_measures_post_revision(df_res_pth, threshold, district_shp_pth, out_pth, area_threshold=7000):
+
+    print("Plot maps and histogramms of concentration measures.")
+    grid_res = 4
+    version_4km = 1
+    gdf_grid = gpd.read_file(rf"00_data\vector\grids\square_grid_4km_v01_with_12km_POLYIDs_BB.gpkg")
+    #rf"00_data\vector\grids\square_grid_{grid_res}km_v{version_4km:02d}_with_12km_POLYIDs.shp"
+
+    df_res = pd.read_csv(df_res_pth.format(threshold))
+
+    shp = pd.merge(gdf_grid, df_res, how='inner', left_on='POLYID', right_on='id_sp_unit')
+    # shp = shp.loc[shp['gini_coeff'] != 0.0]
+    shp = shp.loc[shp['total_area'] > area_threshold].copy()
+
+    ## For QGIS projects
+    # shp.to_file(r"14_paper_figures\vector\grid_with_values.gpkg", driver="GPKG")
+
+
+    # shp["total_area"] = shp["total_area"] / 10000
+
+    shp2 = gpd.read_file(district_shp_pth)
+
+    matplotlib.rcParams.update({'font.size': 12})
+
+    fig = plt.figure(constrained_layout=True, figsize=(12, 11))
+    widths = [1, 1, 1]
+    heights = [4, 1, 4, 1]
+    spec = fig.add_gridspec(
+        ncols=3, nrows=4, width_ratios=widths,
+        height_ratios=heights)
+    cmap = "crest"
+
+    col = "cr1"
+    label = "CR1 [%]"
+    title = "a)"
+    ax = fig.add_subplot(spec[0, 0])
+    vmin_use = shp[col].min() #shp[col].quantile(q=0.02)
+    vmax_use = shp[col].quantile(q=0.98) # shp[col].max() #41 #shp[col].quantile(q=0.999)
+    shp.plot(
+        column=col,
+        ax=ax,
+        legend=True,
+        legend_kwds={'label': label, 'orientation': "horizontal", "fraction": 0.04, "anchor": (0.5, 1.5), "pad": 0.01},
+        vmin=vmin_use,
+        vmax=vmax_use,
+        cmap=cmap
+    )
+    # shp.loc[shp[col] > 40].plot(
+    #     column=col,
+    #     ax=ax,
+    #     legend=False,
+    #     edgecolor='orange',
+    #     facecolor="none",
+    #     lw=0.3, zorder=2
+    # )
+    ax.set_title(title, size=16, x=0.01, y=0.9)
+    ax.axis("off")
+    shp2.plot(edgecolor='black', facecolor="none", ax=ax, lw=0.3, zorder=2)
+
+    ax_sub = fig.add_subplot(spec[1, 0])
+    x = sns.histplot(
+        data=shp,
+        x=col,
+        ax=ax_sub,
+        facecolor="#a3cc91",
+        edgecolor="none"
+    )
+    max_y_val = x.dataLim.bounds[-1]
+    ax_sub.axvline(shp[col].mean(), 0, max_y_val, color='black', linewidth=0.5)
+    bbox_props = dict(boxstyle="round,pad=0.3", fc="w", ec="k", lw=0.72)
+    kw = dict(bbox=bbox_props, zorder=2, va="center")
+    ax_sub.annotate(f"Mean: {round(shp[col].mean(), 2)}", (shp[col].mean(), 0.8 * max_y_val), **kw)
+    ax_sub.set_ylabel(ylabel="No. polygons")
+    ax_sub.set_xlabel(None) #(xlabel=label)
+    ax_sub.spines['right'].set_visible(False)
+    ax_sub.spines['top'].set_visible(False)
+    ax_sub.tick_params(labeltop=False, labelright=False)
+
+    col = "cr4"
+    label = "CR4 [%]"
+    title = "b)"
+    ax = fig.add_subplot(spec[0, 1])
+    vmin_use = shp[col].min() #shp[col].quantile(q=0.02)
+    vmax_use = shp[col].quantile(q=0.98)# shp[col].max() #41
+    shp.plot(
+        column=col,
+        ax=ax,
+        legend=True,
+        legend_kwds={'label': label, 'orientation': "horizontal", "fraction": 0.04, "anchor": (0.5, 1.5), "pad": 0.01},
+        vmin=vmin_use,
+        vmax=vmax_use,
+        cmap=cmap
+    )
+    # shp.loc[shp[col] > 40].plot(
+    #     column=col,
+    #     ax=ax,
+    #     legend=False,
+    #     edgecolor='orange',
+    #     facecolor="none",
+    #     lw=0.3, zorder=2
+    # )
+    ax.set_title(title, size=16, x=0.01, y=0.9)
+    ax.axis("off")
+    shp2.plot(edgecolor='black', facecolor="none", ax=ax, lw=0.3, zorder=2)
+
+    ax_sub = fig.add_subplot(spec[1, 1])
+    x = sns.histplot(
+        data=shp,
+        x=col,
+        ax=ax_sub,
+        facecolor="#a3cc91",
+        edgecolor="none"
+    )
+    max_y_val = x.dataLim.bounds[-1]
+    ax_sub.axvline(shp[col].mean(), 0, max_y_val, color='black', linewidth=0.5)
+    bbox_props = dict(boxstyle="round,pad=0.3", fc="w", ec="k", lw=0.72)
+    kw = dict(bbox=bbox_props, zorder=2, va="center")
+    ax_sub.annotate(f"Mean: {round(shp[col].mean(), 2)}", (shp[col].mean(), 0.8 * max_y_val), **kw)
+    ax_sub.set_ylabel(ylabel="No. polygons")
+    ax_sub.set_xlabel(None) #(xlabel=label)
+    ax_sub.spines['right'].set_visible(False)
+    ax_sub.spines['top'].set_visible(False)
+    ax_sub.tick_params(labeltop=False, labelright=False)
+
+    col = "hhi"
+    label = "HHI"
+    title = "c)"
+    ax = fig.add_subplot(spec[0, 2])
+    vmin_use = shp[col].min() #shp[col].quantile(q=0.02)
+    vmax_use = shp[col].quantile(q=0.98) # shp[col].max() #1100
+    shp.plot(
+        column=col,
+        ax=ax,
+        legend=True,
+        legend_kwds={'label': label, 'orientation': "horizontal", "fraction": 0.04, "anchor": (0.5, 1.5), "pad": 0.01},
+        vmin=vmin_use,
+        vmax=vmax_use,
+        cmap=cmap
+    )
+    # shp.loc[shp[col] > 1000].plot(
+    #     column=col,
+    #     ax=ax,
+    #     legend=False,
+    #     edgecolor='orange',
+    #     facecolor="none",
+    #     lw=0.3, zorder=2
+    # )
+    ax.set_title(title, size=16, x=0.01, y=0.9)
+    ax.axis("off")
+    shp2.plot(edgecolor='black', facecolor="none", ax=ax, lw=0.3, zorder=2)
+
+    ax_sub = fig.add_subplot(spec[1, 2])
+    x = sns.histplot(
+        data=shp,
+        x=col,
+        ax=ax_sub,
+        facecolor="#a3cc91",
+        edgecolor="none"
+    )
+    max_y_val = x.dataLim.bounds[-1]
+    ax_sub.axvline(shp[col].mean(), 0, max_y_val, color='black', linewidth=0.5)
+    bbox_props = dict(boxstyle="round,pad=0.3", fc="w", ec="k", lw=0.72)
+    kw = dict(bbox=bbox_props, zorder=2, va="center")
+    ax_sub.annotate(f"Mean: {round(shp[col].mean(), 2)}", (shp[col].mean(), 0.8 * max_y_val), **kw)
+    ax_sub.set_ylabel(ylabel="No. polygons")
+    ax_sub.set_xlabel(None) #(xlabel=label)
+    ax_sub.spines['right'].set_visible(False)
+    ax_sub.spines['top'].set_visible(False)
+    ax_sub.tick_params(labeltop=False, labelright=False)
+
+    col = "gini_coeff"
+    label = "Gini"
+    title = "d)"
+    ax = fig.add_subplot(spec[2, 0])
+    vmin_use = shp[col].min() #shp[col].quantile(q=0.02)
+    vmax_use = shp[col].quantile(q=0.98) #shp[col].max()
+    shp.plot(
+        column=col,
+        ax=ax,
+        legend=True,
+        legend_kwds={'label': label, 'orientation': "horizontal", "fraction": 0.04, "anchor": (0.5, 1.5), "pad": 0.01},
+        vmin=vmin_use,
+        vmax=vmax_use,
+        cmap=cmap
+    )
+    ax.set_title(title, size=16, x=0.01, y=0.9)
+    ax.axis("off")
+    shp2.plot(edgecolor='black', facecolor="none", ax=ax, lw=0.3, zorder=2)
+
+    ax_sub = fig.add_subplot(spec[3, 0])
+    x = sns.histplot(
+        data=shp,
+        x=col,
+        ax=ax_sub,
+        facecolor="#a3cc91",
+        edgecolor="none"
+    )
+    max_y_val = x.dataLim.bounds[-1]
+    ax_sub.axvline(shp[col].mean(), 0, max_y_val, color='black', linewidth=0.5)
+    bbox_props = dict(boxstyle="round,pad=0.3", fc="w", ec="k", lw=0.72)
+    kw = dict(bbox=bbox_props, zorder=2, va="center")
+    ax_sub.annotate(f"Mean: {round(shp[col].mean(), 2)}", (shp[col].mean(), 0.8 * max_y_val), **kw)
+    ax_sub.set_ylabel(ylabel="No. polygons")
+    ax_sub.set_xlabel(None) #(xlabel=label)
+    ax_sub.spines['right'].set_visible(False)
+    ax_sub.spines['top'].set_visible(False)
+    ax_sub.tick_params(labeltop=False, labelright=False)
+
+    col = "total_area"
+    label = "Agric. area [ha]"
+    title = "e)"
+    ax = fig.add_subplot(spec[2, 1])
+    vmin_use = shp[col].min()  # shp[col].quantile(q=0.02)
+    vmax_use = shp[col].max() #shp[col].quantile(q=0.98)  # shp[col].max()
+    shp.plot(
+        column=col,
+        ax=ax,
+        legend=True,
+        legend_kwds={'label': label, 'orientation': "horizontal", "fraction": 0.04, "anchor": (0.5, 1.5), "pad": 0.01},
+        vmin=vmin_use,
+        vmax=vmax_use,
+        cmap=cmap
+    )
+    ax.set_title(title, size=16, x=0.01, y=0.9)
+    ax.axis("off")
+    shp2.plot(edgecolor='black', facecolor="none", ax=ax, lw=0.3, zorder=2)
+
+    ax_sub = fig.add_subplot(spec[3, 1])
+    x = sns.histplot(
+        data=shp,
+        x=col,
+        ax=ax_sub,
+        facecolor="#a3cc91",
+        edgecolor="none"
+    )
+    max_y_val = x.dataLim.bounds[-1]
+    ax_sub.axvline(shp[col].mean(), 0, max_y_val, color='black', linewidth=0.5)
+    bbox_props = dict(boxstyle="round,pad=0.3", fc="w", ec="k", lw=0.72)
+    kw = dict(bbox=bbox_props, zorder=2, va="center")
+    ax_sub.annotate(f"Mean: {int(shp[col].mean())}", (shp[col].mean(), 0.8 * max_y_val), **kw)
+    ax_sub.set_ylabel(ylabel="No. polygons")
+    ax_sub.set_xlabel(None) #(xlabel=label)
+    ax_sub.spines['right'].set_visible(False)
+    ax_sub.spines['top'].set_visible(False)
+    ax_sub.tick_params(labeltop=False, labelright=False)
+
+    col = "num_owners"
+    label = "No. landowners"
+    title = "f)"
+    ax = fig.add_subplot(spec[2, 2])
+    vmin_use = shp[col].min()  # shp[col].quantile(q=0.02)
+    vmax_use = shp[col].max()  # shp[col].quantile(q=0.98)  # shp[col].max()
+    shp.plot(
+        column=col,
+        ax=ax,
+        legend=True,
+        legend_kwds={'label': label, 'orientation': "horizontal", "fraction": 0.04, "anchor": (0.5, 1.5), "pad": 0.01},
+        vmin=vmin_use,
+        vmax=vmax_use,
+        cmap=cmap
+    )
+    ax.set_title(title, size=16, x=0.01, y=0.9)
+    ax.axis("off")
+    shp2.plot(edgecolor='black', facecolor="none", ax=ax, lw=0.3, zorder=2)
+
+    ax_sub = fig.add_subplot(spec[3, 2])
+    x = sns.histplot(
+        data=shp,
+        x=col,
+        ax=ax_sub,
+        facecolor="#a3cc91",
+        edgecolor="none"
+    )
+    max_y_val = x.dataLim.bounds[-1]
+    ax_sub.axvline(shp[col].mean(), 0, max_y_val, color='black', linewidth=0.5)
+    bbox_props = dict(boxstyle="round,pad=0.3", fc="w", ec="k", lw=0.72)
+    kw = dict(bbox=bbox_props, zorder=2, va="center")
+    ax_sub.annotate(f"Mean: {int(shp[col].mean())}", (shp[col].mean(), 0.8 * max_y_val), **kw)
+    ax_sub.set_ylabel(ylabel="No. polygons")
+    ax_sub.set_xlabel(None) #(xlabel=label)
     ax_sub.spines['right'].set_visible(False)
     ax_sub.spines['top'].set_visible(False)
     ax_sub.tick_params(labeltop=False, labelright=False)
@@ -1567,6 +1854,7 @@ def fig_stacked_lorenz_curve(owner_df_pth, threshold, out_pth):
     #     df_sub = df_plt3.loc[df_plt2[cat_col] == cat].copy()
     #     ax.plot(df_sub["x"], df_sub["cumsumplt"])
 
+
 def table_brandenburg_owners(owner_df_pth, threshold, out_pth):
     print("Create table with information on owners in Brandenburg")
     print("\tRead owner data")
@@ -1637,6 +1925,381 @@ def table_number_owners_and_area_in_company_networks(owner_df_pth, threshold, ou
     df_out.to_csv(out_pth, index=False)
 
 
+def fig_owner_categories_in_concentration_ranges(df_res_pth, df_ct_pth, df_larg_own_pth, district_shp_pth, out_pth, area_threshold=7000):
+    #df_sh_pth,
+
+    print("Plot map and figure with share and location of the largest owner.")
+
+    grid_res = 4
+    version_4km = 1
+    gdf_grid = gpd.read_file(rf"00_data\vector\grids\square_grid_4km_v01_with_12km_POLYIDs_BB.gpkg")
+    #rf"00_data\vector\grids\square_grid_{grid_res}km_v{version_4km:02d}_with_12km_POLYIDs_BB.shp"
+
+    df_res = pd.read_csv(df_res_pth)
+    df_ct = pd.read_csv(df_ct_pth)
+    df_lo = pd.read_csv(df_larg_own_pth)
+    shp2 = gpd.read_file(district_shp_pth)
+
+    # df_sh = pd.read_csv(df_sh_pth)
+    # sub_cols = list(df_sh.columns)
+    # sub_cols = [col for col in sub_cols if "100" in col]
+    # sub_cols.append("POLYID")
+    # df_sh = df_sh[sub_cols]
+
+    df_res = pd.merge(df_res, df_ct, how="left", on="id_sp_unit") #left_on="POLYID", right_on="id_sp_unit")
+    # df_res["total_area"] = df_res["total_area"] / 10000
+    # df_res = pd.merge(df_res, df_sh, how="left", left_on="POLYID", right_on="POLYID")
+
+    shp = pd.merge(gdf_grid, df_res, how='inner', left_on='POLYID', right_on='id_sp_unit')
+    shp = shp.loc[shp['gini_coeff'] != 0.0]
+    shp = shp.loc[shp['total_area'] > area_threshold].copy()
+    shp.to_file(r"C:\Users\IAMO\Documents\work_data\ownership_paper\00_data\vector\grids\square_grid_4km_v01_with_12km_POLYIDs_BB_.gpkg", driver="GPKG")
+
+    shp["top_owner_cat"] = np.nan
+    owner_classes = ["PUBLIC", "nCONETW", "aCONETW", "NONPRO", "siCOMP", "a_siCOMP", "noagPR", "agriPR", "CHURCH"]
+    for owner_class in owner_classes:
+        count_col = f"count_{owner_class}_top1"
+        if count_col in list(shp.columns):
+            shp.loc[shp[count_col] == 1, "top_owner_cat"] = owner_class
+
+    shp["top_owner_cat"] = shp["top_owner_cat"].map(
+        {"PUBLIC": "PU", "nCONETW": "nCN", "aCONETW": "aCN", "NONPRO": "OTH", "siCOMP": "nSC", "a_siCOMP": "aSC",
+         "noagPR": "nPR", "agriPR": "aPR", "CHURCH": "RE"})
+    shp["top_owner_cat"] = pd.Categorical(shp["top_owner_cat"],
+                                            categories=["nCN", "aCN", "PU", "RE", "nPR", "aPR", "aSC", "nSC", "OTH"],
+                                            ordered=True)
+
+    shp.drop(columns=["owner1"], inplace=True)
+    shp3 = pd.merge(shp, df_lo, "left", left_on='POLYID', right_on='id_sp_unit')
+    shp3 = shp3.loc[~shp3["owner1"].isna()].copy()
+
+    ## Map with main owner_class
+    colour_dict = {
+        "aPR": '#f6f739',
+        "nPR": '#bcbd22',
+        "aSC": '#c898f5',
+        "nSC": '#9467bd',
+        "nCN": '#ff7f0e',
+        "aCN": '#fcb97e',
+        "PU": '#1f77b4',
+        "OTH": '#2ca02c',
+        "RE": '#7f7f7f'
+    }
+
+    col = "top_owner_cat"
+    shp["color"] = shp[col].map(colour_dict)
+    shp = shp.loc[shp["color"].notna()].copy()
+
+    custom_patches = [Patch(facecolor=colour_dict[v], label=v) for v in
+                      ["nCN", "aCN", "nPR", "aPR", "aSC", "nSC", "PU", "RE", "OTH"]]
+
+    print("Plotting")
+
+    matplotlib.rcParams.update({'font.size': 12})
+    matplotlib.rcParams['font.family'] = 'Calibri'
+
+    value_col = "cr1"
+    category_col = "top_owner_cat"
+
+    labels = ["<5", "5 to\n<10", "10 to\n<15", "15 to\n<20", "20 to\n<25", "25 to\n<30", ">30"]
+
+    shp["conc_category"] = pd.cut(x=shp[value_col], bins=[0, 5, 10, 15, 20, 25, 30, 60])
+    grouped = shp.groupby(['conc_category', category_col]).size().unstack(fill_value=0)
+    grouped_percentage = grouped.div(grouped.sum(axis=1), axis=0)
+    grouped_percentage = grouped_percentage * 100
+
+    fig, axs = plt.subplots(1, 2, figsize=plotting_lib.cm2inch(25, 12))
+
+    ax1 = axs[0]
+    ax2 = axs[1]
+    shp.plot(
+        color=shp["color"],
+        ax=ax1,
+        legend=False,
+        edgecolor='none'
+    )
+    ax1.legend(handles=custom_patches, bbox_to_anchor=(1.1, .01), ncol=math.ceil(len(custom_patches) / 3))  # ,
+
+    # shp3.plot(
+    #     edgecolor='black',
+    #     facecolor="none",
+    #     ax=ax1,
+    #     lw=0.5,
+    #     zorder=2
+    # )
+
+    shp2.plot(
+        edgecolor='black',
+        facecolor="none",
+        ax=ax1,
+        lw=0.1,
+        zorder=3
+    )
+    ax1.axis("off")
+    ax1.margins(0)
+    ax1.set_title("a)", loc="left")
+
+    grouped_percentage.plot(kind='bar', stacked=True, color=[colour_dict.get(x) for x in grouped_percentage.columns],
+                            ax=ax2, legend=False)
+
+    # Adding labels and title
+    ax2.set_xlabel('CR1 in a 12km radius [%]')
+    ax2.set_ylabel('Share of owner categories [%]')
+
+    # ax2.legend(title='Owner category', bbox_to_anchor=(1.05, 1), loc='upper left', ncol=2)
+    ax2.set_xticklabels(labels)
+    ax2.tick_params(axis='x', labelrotation=0)
+    text="Interpretation example:\nIn regions where CR1 is\nabove 30%, the\nlargest owners are only\npublic entities."
+    ax2.annotate(text, xy=(0.9, 0.8), xytext=(0.55, 0.4), xycoords='axes fraction', arrowprops=dict(facecolor='black', arrowstyle='->'), bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=1', alpha=0.7))
+    # ax2.arrow(x=0.7, y=0.5, dx=0.01, dy=0.2)
+    ax2.set_title("b)", loc="left")
+    ax2.spines['right'].set_visible(False)
+    ax2.spines['top'].set_visible(False)
+    ax2.tick_params(labeltop=False, labelright=False)
+
+    fig.tight_layout()
+    plt.tight_layout()
+    plt.savefig(out_pth, dpi=300)
+    plt.close()
+
+    # fig, ax = plt.subplots(1, 1, figsize=plotting_lib.cm2inch(20, 8))
+    #
+    # grouped.plot(kind='bar', stacked=True, color=[colour_dict.get(x) for x in grouped_percentage.columns], ax=ax)
+    #
+    # # Adding labels and title
+    # plt.xlabel('Share of largest owner in a 12km radius [%]')
+    # plt.ylabel('No. grid cells')
+    #
+    # ax.legend(title='Owner category', bbox_to_anchor=(1.05, 1), loc='upper left', ncol=2)
+    # ax.set_xticklabels(labels)
+    # ax.tick_params(axis='x', labelrotation=0)
+    # text = "Reading examples:\n1) In regions where CR1 is above\n35%, the largest owners are public\norganisations.\n\n2) In regions where CR1 is between\n30 and 35%,the largest owners are\nagricultural company networks."
+    # ax.annotate(text, xy=(1.07, -0.2), xycoords='axes fraction')
+    #
+    # fig.tight_layout()
+    # plt.tight_layout()
+    # out_pth2 = out_pth[:-3] + "_2.png"
+    # plt.savefig(out_pth2, dpi=300)
+    # plt.close()
+
+
+def fig_owner_categories_in_concentration_ranges_v2(df_res_pth, df_ct_pth, df_larg_own_pth, district_shp_pth, out_pth, area_threshold=7000):
+    #df_sh_pth,
+
+    print("Plot map and figure with share and location of the largest owner.")
+
+    grid_res = 4
+    version_4km = 1
+    gdf_grid = gpd.read_file(rf"00_data\vector\grids\square_grid_{grid_res}km_v{version_4km:02d}_with_12km_POLYIDs.shp")
+
+    df_res = pd.read_csv(df_res_pth)
+    df_ct = pd.read_csv(df_ct_pth)
+    df_lo = pd.read_csv(df_larg_own_pth)
+    shp2 = gpd.read_file(district_shp_pth)
+
+    # df_sh = pd.read_csv(df_sh_pth)
+    # sub_cols = list(df_sh.columns)
+    # sub_cols = [col for col in sub_cols if "100" in col]
+    # sub_cols.append("POLYID")
+    # df_sh = df_sh[sub_cols]
+
+    df_res = pd.merge(df_res, df_ct, how="left", on="id_sp_unit") #left_on="POLYID", right_on="id_sp_unit")
+    # df_res["total_area"] = df_res["total_area"] / 10000
+    # df_res = pd.merge(df_res, df_sh, how="left", left_on="POLYID", right_on="POLYID")
+
+    shp = pd.merge(gdf_grid, df_res, how='inner', left_on='POLYID', right_on='id_sp_unit')
+    shp = shp.loc[shp['gini_coeff'] != 0.0]
+    shp = shp.loc[shp['total_area'] > area_threshold].copy()
+    shp.to_file(r"C:\Users\IAMO\Documents\work_data\ownership_paper\00_data\vector\grids\square_grid_4km_v01_with_12km_POLYIDs_BB_.gpkg", driver="GPKG")
+
+    shp["top_owner_cat"] = np.nan
+    owner_classes = ["PUBLIC", "nCONETW", "aCONETW", "NONPRO", "siCOMP", "a_siCOMP", "noagPR", "agriPR", "CHURCH"]
+    for owner_class in owner_classes:
+        count_col = f"count_{owner_class}_top1"
+        if count_col in list(shp.columns):
+            shp.loc[shp[count_col] == 1, "top_owner_cat"] = owner_class
+
+    shp["top_owner_cat"] = shp["top_owner_cat"].map(
+        {"PUBLIC": "PU", "nCONETW": "nCN", "aCONETW": "aCN", "NONPRO": "OTH", "siCOMP": "nSC", "a_siCOMP": "aSC",
+         "noagPR": "nPR", "agriPR": "aPR", "CHURCH": "RE"})
+    shp["top_owner_cat"] = pd.Categorical(shp["top_owner_cat"],
+                                            categories=["nCN", "aCN", "PU", "RE", "nPR", "aPR", "aSC", "nSC", "OTH"],
+                                            ordered=True)
+
+    shp.drop(columns=["owner1"], inplace=True)
+    shp3 = pd.merge(shp, df_lo, "left", left_on='POLYID', right_on='id_sp_unit')
+    shp3 = shp3.loc[~shp3["owner1"].isna()].copy()
+
+    ## Map with main owner_class
+    colour_dict = {
+        "aPR": '#f6f739',
+        "nPR": '#bcbd22',
+        "aSC": '#c898f5',
+        "nSC": '#9467bd',
+        "nCN": '#ff7f0e',
+        "aCN": '#fcb97e',
+        "PU": '#1f77b4',
+        "OTH": '#2ca02c',
+        "RE": '#7f7f7f'
+    }
+
+    col = "top_owner_cat"
+    shp["color"] = shp[col].map(colour_dict)
+    shp = shp.loc[shp["color"].notna()].copy()
+
+    custom_patches = [Patch(facecolor=colour_dict[v], label=v) for v in
+                      ["nCN", "aCN", "nPR", "aPR", "aSC", "nSC", "PU", "RE", "OTH"]]
+
+    print("Plotting")
+
+    matplotlib.rcParams.update({'font.size': 12})
+    matplotlib.rcParams['font.family'] = 'Calibri'
+
+    value_col = "cr1"
+    category_col = "top_owner_cat"
+
+    labels = ["<10", "10 to\n<20", "20 to\n<30", "30 to\n<40", "40 to\n<50", "50 to\n<60", "60 to\n<70", ">70"]
+
+    shp["conc_category"] = pd.cut(x=shp[value_col], bins=[0, 10, 20, 30, 40, 50, 60, 70, 100])
+    grouped = shp.groupby(['conc_category', category_col]).size().unstack(fill_value=0)
+    grouped_percentage = grouped.div(grouped.sum(axis=1), axis=0)
+    grouped_percentage = grouped_percentage * 100
+
+    fig, axs = plt.subplots(1, 2, figsize=plotting_lib.cm2inch(25, 12))
+
+    ax1 = axs[0]
+    ax2 = axs[1]
+    shp.plot(
+        color=shp["color"],
+        ax=ax1,
+        legend=False,
+        edgecolor='none'
+    )
+    ax1.legend(handles=custom_patches, bbox_to_anchor=(1.1, .01), ncol=math.ceil(len(custom_patches) / 3))  # ,
+
+    # shp3.plot(
+    #     edgecolor='black',
+    #     facecolor="none",
+    #     ax=ax1,
+    #     lw=0.5,
+    #     zorder=2
+    # )
+
+    shp2.plot(
+        edgecolor='black',
+        facecolor="none",
+        ax=ax1,
+        lw=0.1,
+        zorder=3
+    )
+    ax1.axis("off")
+    ax1.margins(0)
+    ax1.set_title("a)", loc="left")
+
+    grouped_percentage.plot(kind='bar', stacked=True, color=[colour_dict.get(x) for x in grouped_percentage.columns],
+                            ax=ax2, legend=False)
+
+    # Adding labels and title
+    ax2.set_xlabel('CR1 in a 12km radius [%]')
+    ax2.set_ylabel('Share of owner categories [%]')
+
+    # ax2.legend(title='Owner category', bbox_to_anchor=(1.05, 1), loc='upper left', ncol=2)
+    ax2.set_xticklabels(labels)
+    ax2.tick_params(axis='x', labelrotation=0)
+    text="Interpretation example:\nIn regions where CR1 is\nabove 30%, the\nlargest owners are only\npublic entities."
+    ax2.annotate(text, xy=(0.9, 0.8), xytext=(0.55, 0.4), xycoords='axes fraction', arrowprops=dict(facecolor='black', arrowstyle='->'), bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=1', alpha=0.7))
+    # ax2.arrow(x=0.7, y=0.5, dx=0.01, dy=0.2)
+    ax2.set_title("b)", loc="left")
+    ax2.spines['right'].set_visible(False)
+    ax2.spines['top'].set_visible(False)
+    ax2.tick_params(labeltop=False, labelright=False)
+
+    fig.tight_layout()
+    plt.tight_layout()
+    plt.savefig(out_pth, dpi=300)
+    plt.close()
+
+    # fig, ax = plt.subplots(1, 1, figsize=plotting_lib.cm2inch(20, 8))
+    #
+    # grouped.plot(kind='bar', stacked=True, color=[colour_dict.get(x) for x in grouped_percentage.columns], ax=ax)
+    #
+    # # Adding labels and title
+    # plt.xlabel('Share of largest owner in a 12km radius [%]')
+    # plt.ylabel('No. grid cells')
+    #
+    # ax.legend(title='Owner category', bbox_to_anchor=(1.05, 1), loc='upper left', ncol=2)
+    # ax.set_xticklabels(labels)
+    # ax.tick_params(axis='x', labelrotation=0)
+    # text = "Reading examples:\n1) In regions where CR1 is above\n35%, the largest owners are public\norganisations.\n\n2) In regions where CR1 is between\n30 and 35%,the largest owners are\nagricultural company networks."
+    # ax.annotate(text, xy=(1.07, -0.2), xycoords='axes fraction')
+    #
+    # fig.tight_layout()
+    # plt.tight_layout()
+    # out_pth2 = out_pth[:-3] + "_2.png"
+    # plt.savefig(out_pth2, dpi=300)
+    # plt.close()
+
+
+def fig_appendix_radius_around_fields(df_radiuses_pth, out_pth):
+
+    df = gpd.read_file(df_radiuses_pth)
+    df.sort_values(by="buffer_radius", inplace=True)
+    df.reset_index(inplace=True)
+    df["population_share"] = (df.index + 1) / len(df)
+    df["buffer_radius"] = df["buffer_radius"]/1000
+
+    matplotlib.rcParams.update({'font.size': 12})
+    matplotlib.rcParams['font.family'] = 'Calibri'
+
+    fig, axs = plt.subplots(1, 1, figsize=plotting_lib.cm2inch(12, 12))
+    sns.lineplot(x=df["buffer_radius"], y=df["population_share"])
+    sns.scatterplot(x=[12.02], y=[0.87511])
+    # sns.scatterplot(x=[36.0728797], y=[0.5])
+    axs.set_xlim(0, 30.000)
+    axs.set_xlabel("Distance in km")
+    axs.set_ylabel("Cumulative distribution function")
+    axs.axhline(y=0.87511, linestyle="--", color="black")
+    text = "87 % of all farms have\ntheir fields within a\nradius of 12 km"
+    axs.annotate(text, xy=(12.02, .6),
+                 bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=1', alpha=0.7))
+    # axs.axhline(y=0.5, linestyle="--", color="black")
+    # text = "50% of all farms have\ntheir fields within a\nradius of 3.6 km"
+    # axs.annotate(text, xy=(3.80728797, .3),
+    #              bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=1', alpha=0.7))
+    axs.spines['right'].set_visible(False)
+    axs.spines['top'].set_visible(False)
+    axs.grid(visible=True, which='major', axis='both')
+    axs.tick_params(labeltop=False, labelright=False)
+    fig.tight_layout()
+    # plt.show()
+
+    plt.savefig(out_pth)
+    plt.close()
+
+
+import geopandas as gpd
+import pandas as pd
+
+pth = r"C:\Users\IAMO\Documents\work_data\ownership_paper\09_alkis_intersection_with_other_layers\alkis_grid_4km_v01_iacs_inters.shp"
+gdf = gpd.read_file(pth)
+
+farm_sizes = gdf.groupby("BTNR").agg("area").sum().reset_index()
+farm_sizes.rename(columns={"area": "farm_size"}, inplace=True)
+farm_sizes["farm_size"] = farm_sizes["farm_size"] / 10000
+gdf = pd.merge(gdf, farm_sizes, "left", "BTNR")
+
+gdf_poly = gdf.drop_duplicates(subset=["POLYID", "BTNR"])
+gdf_poly = gdf_poly.loc[gdf_poly["BTNR"].str.slice(0, 2) == str(12)].copy()
+poly_aggr = gdf_poly.groupby("POLYID").agg("farm_size").mean().reset_index()
+poly_aggr.rename(columns={"farm_size": "avg_farm_size"}, inplace=True)
+
+pth_grid = r"C:\Users\IAMO\Documents\work_data\ownership_paper\00_data\vector\grids\square_grid_4km_v01_with_12km_POLYIDs_BB.gpkg"
+grid = gpd.read_file(pth_grid)
+
+grid = pd.merge(grid, poly_aggr, "left", "POLYID")
+grid.to_file(r"C:\Users\IAMO\Documents\work_data\ownership_paper\14_paper_figures\vector\grid_with_farm_sizes.gpkg", driver="GPKG")
+
+
 ## ------------------------------------------ RUN PROCESSES ---------------------------------------------------#
 def main():
     s_time = time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime())
@@ -1656,58 +2319,74 @@ def main():
     #     out_pth=OWNER_DF_FOR_PLOTTING.format(50)
     # )
 
-    fig_share_and_characteristics_owner_categories(
-        owner_df_pth=OWNER_DF_FOR_PLOTTING,
-        threshold=50,
-        out_pth=rf"14_paper_figures\figures\fig03_share_and_characteristics_owner_categories.png"
-    )
+    # fig_share_and_characteristics_owner_categories(
+    #     owner_df_pth=OWNER_DF_FOR_PLOTTING,
+    #     threshold=50,
+    #     out_pth=rf"14_paper_figures\figures\fig03_share_and_characteristics_owner_categories.png"
+    # )
+    #
+    # fig_comparison_map_and_histograms_concentration_measures_pre_revision(
+    #     threshold=50,
+    #     df_res_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
+    #     district_shp_pth=DISTRICT_SHP_PTH,
+    #     out_pth=r"14_paper_figures\figures\fig04_comparison_histograms_concentrations_measures.png"
+    # )
 
-    fig_comparison_map_and_histograms_concentration_measures(
+    ## 12km concentrations
+    fig_comparison_map_and_histograms_concentration_measures_post_revision(
         threshold=50,
-        df_res_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
+        df_res_pth=rf"11_ownership_concentration\mw_grid_buffers\mw_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas_12km.csv",
         district_shp_pth=DISTRICT_SHP_PTH,
-        out_pth=r"14_paper_figures\figures\fig04_comparison_histograms_concentrations_measures.png"
-    )
+        out_pth=r"14_paper_figures\figures\fig04_comparison_histograms_concentrations_measures_12km.png",
+        area_threshold=200)
 
-    fig_histograms_change_concentration_measures(
-        df_res_omerge_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-owner_merge-iacs_areas.csv",
-        df_res_mcomp_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
-        out_pth=r"14_paper_figures\figures\fig05_histograms_change_concentration_measures.png"
-    )
-
-    fig_share_and_location_largest_owners(
-        df_res_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
-        df_ct_pth=rf"11_ownership_concentration\mw_grid\mw_counts_categories_in_topx-grid_4km_v01-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
-        df_sh_pth=rf"11_ownership_concentration\mw_grid\mw_mean_share_counts_categories-mother_companies-comm_w_thr50-iacs_areas.csv",
+    ## 4 km concentrations
+    fig_comparison_map_and_histograms_concentration_measures_post_revision(
+        threshold=50,
+        df_res_pth=rf"11_ownership_concentration\mw_grid_buffers\mw_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas_4km.csv",
         district_shp_pth=DISTRICT_SHP_PTH,
-        out_pth=r"14_paper_figures\figures\fig06_share_and_location_largest_owners.png"
-    )
+        out_pth=r"14_paper_figures\figures\fig04_comparison_histograms_concentrations_measures_4km.png",
+        area_threshold=200)
 
-    fig_appendix_change_in_distances_aggregation_levels(
-        owner_df_pth=OWNER_DF_FOR_PLOTTING,
-        threshold=50,
-        out_pth=rf"14_paper_figures\figures\fig_appendix03_change_in_distances_aggregation_levels.png"
-    )
-
-    fig_appendix_characteristics_company_networks(
-        owner_df_pth=OWNER_DF_FOR_PLOTTING,
-        threshold=50,
-        out_pth=rf"14_paper_figures\figures\fig_appendix04_characteristics_company_networks.png"
-    )
-
-    table_change_in_concentration_measures(
-        cm_omerge_grid_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-owner_merge-iacs_areas.csv",
-        cm_mcomp_grid_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
-        cm_omerge_state_pth=rf"11_ownership_concentration\state\state_conc_meas-owner_merge-iacs_areas.csv",
-        cm_mcomp_state_pth=rf"11_ownership_concentration\state\state_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
-        out_pth=rf"14_paper_figures\tables\table02_change_in_concentration_measures.csv"
-    )
-
-    table_largest_owner_examples(
-        owner_df_pth=OWNER_DF_FOR_PLOTTING,
-        threshold=50,
-        out_pth=rf"14_paper_figures\tables\table03_largest_owner_examples.csv"
-    )
+    # fig_histograms_change_concentration_measures(
+    #     df_res_omerge_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-owner_merge-iacs_areas.csv",
+    #     df_res_mcomp_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
+    #     out_pth=r"14_paper_figures\figures\fig05_histograms_change_concentration_measures.png"
+    # )
+    #
+    # fig_share_and_location_largest_owners(
+    #     df_res_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
+    #     df_ct_pth=rf"11_ownership_concentration\mw_grid\mw_counts_categories_in_topx-grid_4km_v01-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
+    #     df_sh_pth=rf"11_ownership_concentration\mw_grid\mw_mean_share_counts_categories-mother_companies-comm_w_thr50-iacs_areas.csv",
+    #     district_shp_pth=DISTRICT_SHP_PTH,
+    #     out_pth=r"14_paper_figures\figures\fig06_share_and_location_largest_owners.png"
+    # )
+    #
+    # fig_appendix_change_in_distances_aggregation_levels(
+    #     owner_df_pth=OWNER_DF_FOR_PLOTTING,
+    #     threshold=50,
+    #     out_pth=rf"14_paper_figures\figures\fig_appendix03_change_in_distances_aggregation_levels.png"
+    # )
+    #
+    # fig_appendix_characteristics_company_networks(
+    #     owner_df_pth=OWNER_DF_FOR_PLOTTING,
+    #     threshold=50,
+    #     out_pth=rf"14_paper_figures\figures\fig_appendix04_characteristics_company_networks.png"
+    # )
+    #
+    # table_change_in_concentration_measures(
+    #     cm_omerge_grid_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-owner_merge-iacs_areas.csv",
+    #     cm_mcomp_grid_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
+    #     cm_omerge_state_pth=rf"11_ownership_concentration\state\state_conc_meas-owner_merge-iacs_areas.csv",
+    #     cm_mcomp_state_pth=rf"11_ownership_concentration\state\state_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
+    #     out_pth=rf"14_paper_figures\tables\table02_change_in_concentration_measures.csv"
+    # )
+    #
+    # table_largest_owner_examples(
+    #     owner_df_pth=OWNER_DF_FOR_PLOTTING,
+    #     threshold=50,
+    #     out_pth=rf"14_paper_figures\tables\table03_largest_owner_examples.csv"
+    # )
 
     # table_number_owners_and_area_in_company_networks(
     #     owner_df_pth=OWNER_DF_FOR_PLOTTING,
@@ -1738,6 +2417,41 @@ def main():
     #     owner_df_pth=OWNER_DF_FOR_PLOTTING,
     #     threshold=50,
     #     out_pth=rf"14_paper_figures\tables\stacked_lorenz_curve.png")
+
+    # fig_owner_categories_in_concentration_ranges(
+    #     df_res_pth=rf"11_ownership_concentration\mw_grid_buffers\mw_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
+    #     df_ct_pth=rf"11_ownership_concentration\mw_grid_buffers\mw_counts_categories_in_topx-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
+    #     df_larg_own_pth=fr"15_additional_analysis\largest_owners\_community_distribution\polygons_largest_15_owners.csv",
+    #     # df_sh_pth=rf"11_ownership_concentration\mw_grid\mw_mean_share_counts_categories-mother_companies-comm_w_thr50-iacs_areas.csv",
+    #     district_shp_pth=DISTRICT_SHP_PTH,
+    #     out_pth=r"14_paper_figures\figures\fig05_owner_categories_in_concentration_ranges_12km.png"
+    # )
+
+    # fig_owner_categories_in_concentration_ranges(
+    #     df_res_pth=rf"11_ownership_concentration\mw_grid_buffers\mw_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas_12km.csv",
+    #     df_ct_pth=rf"11_ownership_concentration\mw_grid_buffers\mw_counts_categories_in_topx-mother_companies-comm_w_thr{threshold}-iacs_areas_12km.csv",
+    #     df_larg_own_pth=fr"15_additional_analysis\largest_owners\_community_distribution\polygons_largest_15_owners.csv",
+    #     # df_sh_pth=rf"11_ownership_concentration\mw_grid\mw_mean_share_counts_categories-mother_companies-comm_w_thr50-iacs_areas.csv",
+    #     district_shp_pth=DISTRICT_SHP_PTH,
+    #     out_pth=r"14_paper_figures\figures\fig05_owner_categories_in_concentration_ranges_12km.png",
+    #     area_threshold=200
+    # )
+
+    # fig_owner_categories_in_concentration_ranges_v2(
+    #     df_res_pth=rf"11_ownership_concentration\mw_grid_buffers\mw_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas_4km.csv",
+    #     df_ct_pth=rf"11_ownership_concentration\mw_grid_buffers\mw_counts_categories_in_topx-mother_companies-comm_w_thr{threshold}-iacs_areas_4km.csv",
+    #     df_larg_own_pth=fr"15_additional_analysis\largest_owners\_community_distribution\polygons_largest_15_owners.csv",
+    #     # df_sh_pth=rf"11_ownership_concentration\mw_grid\mw_mean_share_counts_categories-mother_companies-comm_w_thr50-iacs_areas.csv",
+    #     district_shp_pth=DISTRICT_SHP_PTH,
+    #     out_pth=r"14_paper_figures\figures\fig05_owner_categories_in_concentration_ranges_4km.png",
+    #     area_threshold=200
+    # )
+
+    # fig_appendix_radius_around_fields(
+    #     df_radiuses_pth=r"11_ownership_concentration\farm_centroids_max_radius.gpkg",
+    #     out_pth=r"14_paper_figures\figures\fig_appendix_cumulative_distribution_function_farm_radiuses.png"
+    # )
+
 
     e_time = time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime())
     print("start: " + s_time)
