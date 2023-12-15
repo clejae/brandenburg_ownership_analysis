@@ -2276,28 +2276,26 @@ def fig_appendix_radius_around_fields(df_radiuses_pth, out_pth):
     plt.savefig(out_pth)
     plt.close()
 
+def calculate_farm_sizes_per_grid_cell_for_overview_map():
 
-import geopandas as gpd
-import pandas as pd
+    pth = r"09_alkis_intersection_with_other_layers\alkis_grid_4km_v01_iacs_inters.shp"
+    gdf = gpd.read_file(pth)
 
-pth = r"C:\Users\IAMO\Documents\work_data\ownership_paper\09_alkis_intersection_with_other_layers\alkis_grid_4km_v01_iacs_inters.shp"
-gdf = gpd.read_file(pth)
+    farm_sizes = gdf.groupby("BTNR").agg("area").sum().reset_index()
+    farm_sizes.rename(columns={"area": "farm_size"}, inplace=True)
+    farm_sizes["farm_size"] = farm_sizes["farm_size"] / 10000
+    gdf = pd.merge(gdf, farm_sizes, "left", "BTNR")
 
-farm_sizes = gdf.groupby("BTNR").agg("area").sum().reset_index()
-farm_sizes.rename(columns={"area": "farm_size"}, inplace=True)
-farm_sizes["farm_size"] = farm_sizes["farm_size"] / 10000
-gdf = pd.merge(gdf, farm_sizes, "left", "BTNR")
+    gdf_poly = gdf.drop_duplicates(subset=["POLYID", "BTNR"])
+    gdf_poly = gdf_poly.loc[gdf_poly["BTNR"].str.slice(0, 2) == str(12)].copy()
+    poly_aggr = gdf_poly.groupby("POLYID").agg("farm_size").mean().reset_index()
+    poly_aggr.rename(columns={"farm_size": "avg_farm_size"}, inplace=True)
 
-gdf_poly = gdf.drop_duplicates(subset=["POLYID", "BTNR"])
-gdf_poly = gdf_poly.loc[gdf_poly["BTNR"].str.slice(0, 2) == str(12)].copy()
-poly_aggr = gdf_poly.groupby("POLYID").agg("farm_size").mean().reset_index()
-poly_aggr.rename(columns={"farm_size": "avg_farm_size"}, inplace=True)
+    pth_grid = r"00_data\vector\grids\square_grid_4km_v01_with_12km_POLYIDs_BB.gpkg"
+    grid = gpd.read_file(pth_grid)
 
-pth_grid = r"C:\Users\IAMO\Documents\work_data\ownership_paper\00_data\vector\grids\square_grid_4km_v01_with_12km_POLYIDs_BB.gpkg"
-grid = gpd.read_file(pth_grid)
-
-grid = pd.merge(grid, poly_aggr, "left", "POLYID")
-grid.to_file(r"C:\Users\IAMO\Documents\work_data\ownership_paper\14_paper_figures\vector\grid_with_farm_sizes.gpkg", driver="GPKG")
+    grid = pd.merge(grid, poly_aggr, "left", "POLYID")
+    grid.to_file(r"14_paper_figures\vector\grid_with_farm_sizes.gpkg", driver="GPKG")
 
 
 ## ------------------------------------------ RUN PROCESSES ---------------------------------------------------#
