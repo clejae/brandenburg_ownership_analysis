@@ -670,6 +670,11 @@ def classify_communities_from_info_dict(info_dict_pth, alkis_reduced_pth, netw_c
 
     df_alk_complete = pd.merge(df_alk_complete, df_alk_out, "left", on=['mother_company'])
 
+    ## Manually correct some missing information
+    df_alk_complete.loc[df_alk_complete[comm_col] == "57_3", "city_mcomp"] = "Winsen (Aller)"
+    df_alk_complete.loc[df_alk_complete[comm_col] == "57_3", "city_mcomp"] = "Deutschland"
+    df_alk_complete.loc[df_alk_complete[comm_col] == "57_3", "city_mcomp"] = "Niedersachsen"
+
     # print("\tLevel C category of community 5_2:", df_alk_complete.loc[df_alk_complete[comm_col].isin(["5_2"]), "level_c_category"].unique())
     # t = df_alk_complete.loc[df_alk_complete[comm_col] == "5_5"].copy()
 
@@ -678,7 +683,7 @@ def classify_communities_from_info_dict(info_dict_pth, alkis_reduced_pth, netw_c
     df_cn.drop_duplicates(subset=["mother_company", "city_mcomp"], inplace=True)
     df_cn = df_cn.loc[(df_cn["city"] != df_cn["city_mcomp"]) & (df_cn["city_mcomp"] != "Unbekannt")].copy()
     print("\tNo. of entries for which the distances will be calculated:", len(df_cn))
-
+    t = df_alk_complete.loc[df_alk_complete["level_c_category"].isin(['2_9_1', '2_9_2', '3_9_1', '4_9_1', '5_9_1'])].copy()
     ## Create a list of addresses for all global ultimate owners with address from : "city, country"
     mcomp_addrs = []
     for row in df_cn.itertuples():
@@ -697,7 +702,7 @@ def classify_communities_from_info_dict(info_dict_pth, alkis_reduced_pth, netw_c
     df_cn = pd.concat([df_cn, df_cn_misses])
     df_cn.loc[df_cn["mcomp_loc"].isna(), "mcomp_loc"] = np.nan
     df_cn.loc[df_cn["city_mcomp"] == "Ledge", "mcomp_loc"] = "POINT (11.8383514 52.9103928)"
-
+    t = df_cn[["EIGENTUEME", "owner_clean", "owner_merge", "clean_address", "geometry", "parcel_loc", "mcomp_loc", "community_50", "mother_company", "distance"]].copy()
     ## Add information to ALKIS data frame
     geom_dict = {row.mother_company: row.mcomp_loc for row in df_cn.itertuples()}
     df_alk_complete["mcomp_loc"] = df_alk_complete["mother_company"].map(geom_dict)
@@ -708,6 +713,9 @@ def classify_communities_from_info_dict(info_dict_pth, alkis_reduced_pth, netw_c
     df_alk_complete.loc[df_alk_complete["mcomp_loc"].isna(), "mcomp_loc"] = df_alk_complete.loc[df_alk_complete["mcomp_loc"].isna(), "geometry"]
     df_alk_complete.loc[df_alk_complete["mcomp_dist"].isna(), "mcomp_dist"] = df_alk_complete.loc[
         df_alk_complete["mcomp_dist"].isna(), "distance"]
+
+    distance_orig = df_alk_complete.loc[df_alk_complete["community_50"] == "57_3", "distance"].mean()
+    distance_mcomp = df_alk_complete.loc[df_alk_complete["community_50"] == "57_3", "mcomp_dist"].mean()
 
     print("\tNumber of entries before export:", len(df_alk_complete))
     df_alk_complete.to_csv(out_pth, sep=';', index=False)
@@ -1019,14 +1027,14 @@ def main():
         #     out_pth=OWNERS_W_THRESH_REDUCED_PTH.format(threshold)
         # )
 
-        derive_community_information_from_dafne_data(
-            dafne_pth=COMMUNITY_DAFNE_CSV_W_THRESH.format(threshold),
-            info_dict_pth=COMMUNITY_INFO_DICT_W_THRESH.format(threshold),
-            comm_col=comm_col,
-            net_branch_pth=NETW_BRANCH_PTH,
-            stopword_lst_pth=STOPWORD_LIST,
-            out_pth=COMMUNITY_INFO_FROM_DAFNE_W_THRESH.format(threshold)
-        )
+        # derive_community_information_from_dafne_data(
+        #     dafne_pth=COMMUNITY_DAFNE_CSV_W_THRESH.format(threshold),
+        #     info_dict_pth=COMMUNITY_INFO_DICT_W_THRESH.format(threshold),
+        #     comm_col=comm_col,
+        #     net_branch_pth=NETW_BRANCH_PTH,
+        #     stopword_lst_pth=STOPWORD_LIST,
+        #     out_pth=COMMUNITY_INFO_FROM_DAFNE_W_THRESH.format(threshold)
+        # )
 
         # classify_communities_from_info_dict(
         #     info_dict_pth=COMMUNITY_INFO_DICT_W_THRESH.format(threshold),
@@ -1038,14 +1046,14 @@ def main():
         #     curr_folder=CURR_FOLDER
         # )
 
-        ## Ab hier wird es etwas messy. Da ich hier nur die intersection der IACS+ALKIS Daten nutze, charakterisiere ich nur
-        ## die communities, die Land auf den IACS Flächen besitzen. Dadurch entstehen NAs in der "new_category"!
-        get_characteristics_of_communities_from_alkis(
-            alkis_iacs_municip_inters_pth=ALKIS_IACS_MUNICIP_PTH,
-            owners_pth=OWNERS_W_THRESH_AND_LOC_PTH.format(threshold),
-            comm_col=comm_col,
-            municips_covered_by_comm_pth=MUNICIP_NEIGHBOR_DICT_PTH,
-            out_pth=CHARACTERISTICS_OF_COMMS_PTH.format(threshold))
+        ## From here it gets a bit messy. Since I only use the intersection of the IACS+ALKIS data here, I only characterise
+        ## the communities that own land on the IACS areas. This creates NAs in the "new_category"!
+        # get_characteristics_of_communities_from_alkis(
+        #     alkis_iacs_municip_inters_pth=ALKIS_IACS_MUNICIP_PTH,
+        #     owners_pth=OWNERS_W_THRESH_AND_LOC_PTH.format(threshold),
+        #     comm_col=comm_col,
+        #     municips_covered_by_comm_pth=MUNICIP_NEIGHBOR_DICT_PTH,
+        #     out_pth=CHARACTERISTICS_OF_COMMS_PTH.format(threshold))
 
         combine_information_of_communities_and_classify(
             df_info_alkis_pth=CHARACTERISTICS_OF_COMMS_PTH.format(threshold),

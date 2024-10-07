@@ -536,24 +536,24 @@ def main():
         iacs_pth=r"00_data\vector\IACS\IACS_BB_2020.shp",
         out_pth=r"11_ownership_concentration\farm_centroids_max_radius.gpkg")
 
-    # threshold = 50
-    # descr = f"mother_companies-comm_w_thr{threshold}-iacs_areas"
-    # for radius in [4]:
+    threshold = 50
+    descr = f"mother_companies-comm_w_thr{threshold}-iacs_areas"
+    for radius in [4]:
     #     print(f"\n###########################\nCALCULATE CONCENTRATION MEASURES IN {radius}KM RADIUS.\n###########################\n")
     #     ########################### OWNERSHIP CONCENTRATION MEASURES ###########################
-    #     calculate_concentration_around_purchases_on_raster(
-    #         rastered_parcels_pth=PARCELS_RAS_PTH,
-    #         grid_centroids_pth=GRID_CENTROIDS_PTH,
-    #         owner_pth=OWNERS_W_THRESH_PTH.format(threshold),
-    #         buffer_radius=radius*1000,
-    #         parcel_id_col="OGC_FID",
-    #         owner_col='mother_company',
-    #         # feature_count=300,
-    #         point_id_col="POLYID",
-    #         out_pth_concs=CONC_MEASURES_MW_GRID_BUFFERS_PTH.format(descr + f"_{radius}km"),
-    #         out_pth_counts=COUNTS_MW_GRID_BUFFER_PTH.format(descr + f"_{radius}km")
-    #     )
-    #
+        calculate_concentration_around_purchases_on_raster(
+            rastered_parcels_pth=PARCELS_RAS_PTH,
+            grid_centroids_pth=GRID_CENTROIDS_PTH,
+            owner_pth=OWNERS_W_THRESH_PTH.format(threshold),
+            buffer_radius=radius*1000,
+            parcel_id_col="OGC_FID",
+            owner_col='mother_company',
+            # feature_count=300,
+            point_id_col="POLYID",
+            out_pth_concs=CONC_MEASURES_MW_GRID_BUFFERS_PTH.format(descr + f"_{radius}km"),
+            out_pth_counts=COUNTS_MW_GRID_BUFFER_PTH.format(descr + f"_{radius}km")
+        )
+
     # print(
     #     f"\n###########################\nCALCULATE CONCENTRATION MEASURES IN FLEXIBLE RADIUS.\n###########################\n")
     # descr = f"mother_companies-comm_w_thr{threshold}-iacs_areas-flexible_farm_buffers"

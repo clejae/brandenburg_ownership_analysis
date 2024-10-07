@@ -37,6 +37,10 @@ def prepare_df(owner_df_pth, alkis_iacs_intersection_pth, df_info_dafne_pth, thr
     df_owners = pd.read_csv(owner_df_pth.format(threshold), sep=";")
     print("\tUnique owner classes:", df_owners["new_category"].unique())
 
+    df_owners.loc[df_owners['mcomp_loc'].notna(), "mcomp_dist"] = df_owners.loc[
+        df_owners['mcomp_loc'].notna()].apply(
+        lambda row: helper_functions.wkt_point_distance(row.parcel_loc, row.mcomp_loc), axis=1)
+
     print("\tRead alkis-iacs data intersected")
     gdf = gpd.read_file(alkis_iacs_intersection_pth)
     gdf["area"] = gdf["geometry"].area
@@ -50,6 +54,8 @@ def prepare_df(owner_df_pth, alkis_iacs_intersection_pth, df_info_dafne_pth, thr
         owner_df=df_owners[["OGC_FID", "mother_company", f"community_{threshold}", "owner_merge", "level1", "level3",
                             "level_c_category", "new_category", "mcomp_dist", "distance",
                              "agric", 'city_mcomp', 'fstate_mcomp', "netw_max_dist"]])
+
+
     df["mcomp_dist"] = df["mcomp_dist"] / 1000
     df["distance"] = df["distance"] / 1000
     print(df["new_category"].unique())
@@ -68,7 +74,7 @@ def prepare_df(owner_df_pth, alkis_iacs_intersection_pth, df_info_dafne_pth, thr
     df.to_csv(out_pth, sep=";", index=False)
 
 
-def fig_share_and_characteristics_owner_categories(owner_df_pth, threshold, out_pth):
+def fig_share_and_characteristics_owner_categories_pre_revision(owner_df_pth, threshold, out_pth):
     print("Figure share and characteristics of owner categories")
     print("\tRead owner data")
     df = pd.read_csv(owner_df_pth.format(threshold), sep=";")
@@ -355,6 +361,220 @@ def fig_share_and_characteristics_owner_categories(owner_df_pth, threshold, out_
     # plt.savefig(rf"12_area_calculations\figures\fig_share_and_characteristics_owner_categories{descr}.png")
     # plt.close()
 
+def fig_share_and_characteristics_owner_categories_post_revision(owner_df_pth, threshold, out_pth):
+    print("Figure share and characteristics of owner categories")
+    print("\tRead owner data")
+    df = pd.read_csv(owner_df_pth.format(threshold), sep=";")
+
+    cat_col = "new_category"
+    print(df[cat_col].unique())
+    t = df.loc[df[cat_col].isna()].copy()
+    df[cat_col] = df[cat_col].map({"PUBLIC": "Public institutions", "nCONETW": "Non-agricultural\ncompany networks",
+                                   "aCONETW": "Agricultural\ncompany networks", "NONPRO": "Other institutions",
+                                   "siCOMP": "Non-agricultural\nsingle companies", "a_siCOMP": "Agricultural\nsingle companies",
+                                   "noagPR": "Non-agricultural\nprivate persons", "agriPR": "Agricultural\nprivate persons",
+                                   "CHURCH": "Religious institutions"})
+    # labels = ["PU", "nCN", "OTH", "nSC", "aSC", "nPR", "aPR", "CH"]
+    labels = ["Agricultural\nprivate persons", "Non-agricultural\nprivate persons", "Agricultural\nsingle companies",
+              "Non-agricultural\nsingle companies", "Agricultural\ncompany networks",
+              "Non-agricultural\ncompany networks",
+              "Public institutions", "Other institutions", "Religious institutions"]
+
+    print("\tPrepare dfs for plotting")
+    ## ger average plot size per owner and owner class
+    df_own_parc = df.groupby(["mother_company", "OGC_FID"]).agg(
+        area=pd.NamedAgg("area", "sum"),
+        category=pd.NamedAgg(cat_col, "first"),
+        mcomp_dist=pd.NamedAgg("mcomp_dist", "mean")
+    ).reset_index()
+    df_own_parc.rename(columns={"category": cat_col}, inplace=True)
+    bins = [0, 10, 25, 50, 250, 12000]
+    df_own_parc["dist_class"] = pd.cut(df_own_parc["mcomp_dist"],
+                                          bins=bins,
+                                          labels=["<10", "10 to\n<25", "25 to\n<50", "50 to\n<250", ">250"],
+                                          )
+    df_own_parc["dist_class"] = df_own_parc["dist_class"].cat.add_categories("unkown").fillna("unkown")
+
+    df_dist_bar = df_own_parc.groupby([cat_col, "dist_class"]).agg(
+        area=pd.NamedAgg("area", "sum")
+    ).reset_index()
+    df_dist_bar[cat_col] = pd.Categorical(df_dist_bar[cat_col], categories=labels, ordered=False)
+    df_dist_share = df_dist_bar.groupby("dist_class").agg(
+        area=pd.NamedAgg("area", "sum")
+    ).reset_index()
+    df_dist_share["share"] = round(df_dist_share["area"] / df_dist_share["area"].sum() * 100, 1)
+
+    ## get number of owners and area per owner class
+    df_own_agg = df_own_parc.groupby("mother_company").agg(
+        area=pd.NamedAgg("area", "sum"),
+        category=pd.NamedAgg(cat_col, "first"),
+        num_plots=pd.NamedAgg("OGC_FID", "nunique"),
+        avg_dist=pd.NamedAgg("mcomp_dist", "mean"),
+        min_dist=pd.NamedAgg("mcomp_dist", "min"),
+        max_dist=pd.NamedAgg("mcomp_dist", "max")
+    ).reset_index()
+    df_own_agg.rename(columns={"category": cat_col}, inplace=True)
+    df_own_agg["range_dist"] = df_own_agg["max_dist"] - df_own_agg["min_dist"]
+
+    df_own_agg["avg_dist_class"] = pd.cut(df_own_agg["avg_dist"],
+                                          bins=[0, 10, 25, 50, 250, df_own_agg["avg_dist"].max()],
+                                          labels=["<10", "10 to\n<25", "25 to\n<50", "50 to\n<250", ">250"]
+                                          )
+    df_own_agg["avg_dist_class"] = df_own_agg["avg_dist_class"].cat.add_categories("unkown").fillna("unkown")
+
+    df_num = df_own_agg.groupby(cat_col).agg(
+        number_owners=pd.NamedAgg("mother_company", "count"),
+        area=pd.NamedAgg("area", "sum"),
+        avg_area=pd.NamedAgg("area", "mean"),
+        avg_dist=pd.NamedAgg("avg_dist", "mean"),
+        avg_max_dist=pd.NamedAgg("max_dist", "mean"),
+    ).reset_index()
+    df_num["area_share"] = round((df_num["area"] / df_num["area"].sum()) * 100, 1)
+
+    df_num2 = df_own_parc.groupby(cat_col).agg(
+        number_owners=pd.NamedAgg("mother_company", "nunique"),
+        area=pd.NamedAgg("area", "sum"),
+        avg_plot_area=pd.NamedAgg("area", "mean"),
+        avg_dist=pd.NamedAgg("mcomp_dist", "mean"),
+        median_dist=pd.NamedAgg("mcomp_dist", "median"),
+        num_plots=pd.NamedAgg("OGC_FID", "nunique")
+    ).reset_index()
+    df_num2["avg_no_plots"] = df_num2["num_plots"] / df_num2["number_owners"]
+    df_num2["avg_area"] = df_num2["area"] / df_num2["number_owners"]
+    df_num2.to_csv(out_pth[:-4] + '.csv', sep=";", index=False)
+
+    df_num_dist = df_own_agg.groupby([cat_col, "avg_dist_class"]).agg(
+        number_owners=pd.NamedAgg("mother_company", "count")
+    ).reset_index()
+
+    df_num_dist = pd.pivot(df_num_dist, index=cat_col, columns="avg_dist_class", values="number_owners")
+    df_num_dist.loc['ALL'] = df_num_dist.sum()
+    df_num_dist = round(df_num_dist.div(df_num_dist.sum(axis=1), axis=0) * 100, 0)
+    df_num_dist = df_num_dist.reindex(labels)
+
+    df_area_dist = df_own_agg.groupby([cat_col, "avg_dist_class"]).agg(
+        area=pd.NamedAgg("area", "sum")
+    ).reset_index()
+    df_area_dist = pd.pivot(df_area_dist, index=cat_col, columns="avg_dist_class", values="area")
+    df_area_dist.loc['ALL'] = df_area_dist.sum()
+    df_area_dist = round(df_area_dist.div(df_area_dist.sum(axis=1), axis=0) * 100, 0)
+    df_area_dist = df_area_dist.reindex(labels)
+
+    ## PLOTTING
+    print("\tPlotting")
+
+    ############## OWNER MERGE ##############
+    num_colors = len(labels)
+    color_list = ['#1f77b4', '#ff7f0e', '#2ca02c', '#9467bd', '#c898f5', '#bcbd22', '#f6f739', '#7f7f7f', '#fcb97e']
+    # colour_dict = dict(zip(labels, color_list[:num_colors]))
+    labels = ["Agricultural\nprivate persons", "Non-agricultural\nprivate persons", "Agricultural\nsingle companies",
+              "Non-agricultural\nsingle companies", "Agricultural\ncompany networks", "Non-agricultural\ncompany networks",
+              "Public institutions", "Other institutions", "Religious institutions"]
+
+    colour_dict = {
+        "Agricultural\ncompany networks": '#f6f739',
+        "Non-agricultural\ncompany networks": '#bcbd22',
+        "Agricultural\nsingle companies": '#c898f5',
+        "Non-agricultural\nsingle companies": '#9467bd',
+        "Agricultural\nprivate persons": '#ff7f0e',
+        "Non-agricultural\nprivate persons": '#fcb97e',
+        "Public institutions": '#1f77b4',
+        "Other institutions": '#2ca02c',
+        "Religious institutions": '#7f7f7f'
+    }
+
+    matplotlib.rcParams.update({'font.size': 11})
+
+    fig, axs = plt.subplots(nrows=1, ncols=2, figsize=plotting_lib.cm2inch(24, 11))
+    # gs = GridSpec(1, 2, figure=fig)
+    for i, ax in enumerate(fig.axes):
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+        # ax.spines['bottom'].set_visible(False)
+        # ax.spines['left'].set_visible(False)
+        ax.tick_params(labeltop=False, labelright=False)
+
+    ax2 = axs[0]
+    ax4 = axs[1]
+    ax2.tick_params(top=False, labeltop=False, bottom=True, labelbottom=True)
+    ax4.tick_params(top=False, labeltop=False, bottom=True, labelbottom=True)
+
+    ## Area share
+    df_num.sort_values(by="area_share", ascending=False, inplace=True)
+    df_num[cat_col] = pd.Categorical(df_num[cat_col], categories=df_num[cat_col].tolist(), ordered=True)
+    ax2.set_title("a)", loc="left")
+    ax2.grid(visible=True, which="both", axis="x", zorder=0)
+    ax2.set_axisbelow(True)
+    ax2.grid(visible=True, which="major", axis="y", zorder=0)
+    sns.barplot(y=cat_col, x="area_share", data=df_num, ax=ax2, palette=colour_dict)
+    ax2.set_xlabel("Share per owner category [%]")
+    ax2.xaxis.set_label_position('bottom')
+    ax2.set_ylabel(None)
+    ax2.spines['right'].set_visible(False)
+    ax2.spines['top'].set_visible(False)
+
+    ## Mean area per owner
+    ax4.set_title("b)", loc="left")
+    ax4.grid(visible=True, which="both", axis="x", zorder=0)
+    ax4.set_axisbelow(True)
+    sns.barplot(y=cat_col, x="avg_area", data=df_num, ax=ax4, palette=colour_dict)
+    ax4.set_xlabel("Mean area per owner in category [ha]")
+    ax4.xaxis.set_label_position('bottom')
+    ax4.set_ylabel(None)
+    ax4.get_yaxis().set_ticks([])
+    ax4.spines['right'].set_visible(False)
+    ax4.spines['top'].set_visible(False)
+
+    plt.tight_layout()
+    plt.savefig(out_pth[:-4] + '_a.png')
+    plt.close()
+
+    fig, axs = plt.subplots(nrows=1, ncols=2, figsize=plotting_lib.cm2inch(25, 11))
+    # gs = GridSpec(1, 2, figure=fig)
+    for i, ax in enumerate(fig.axes):
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+        # ax.spines['bottom'].set_visible(False)
+        # ax.spines['left'].set_visible(False)
+        ax.tick_params(labeltop=False, labelright=False)
+
+    ax1 = axs[0]
+    ax5 = axs[1]
+
+    ## Distance (x) + share area (y)
+    ax1.set_title("c)", loc="left")
+    ax1.grid(visible=True, which="major", axis="y", zorder=0)
+    ax1.set_axisbelow(True)
+    df_dist_share['area'] = df_dist_share['area'] / 1000
+    sns.barplot(x="dist_class", y='area', data=df_dist_share, ax=ax1, edgecolor='none', facecolor='#a3cc91')
+    ax1.legend([], [], frameon=False)
+    bbox_props = dict(boxstyle="round,pad=0.3", fc="w", ec="k", lw=0.72)
+    kw = dict(bbox=bbox_props, zorder=1, va="center")
+    for i, dist_class in enumerate(df_dist_share["dist_class"].tolist()):
+        y = df_dist_share.loc[df_dist_share["dist_class"] == dist_class, "area"].iloc[0]
+        text = f"{df_dist_share.loc[df_dist_share['dist_class'] == dist_class, 'share'].iloc[0]} %"
+        ax1.annotate(text, (i, y + 50), (i - 0.3, y + 50), **kw)
+    ax1.set_ylabel("Area [1,000 ha]")
+    ax1.set_xlabel("Distance to parcel [km]")
+    ax1.spines['right'].set_visible(False)
+    ax1.spines['top'].set_visible(False)
+    ax1.set_ylim(0, 800)
+
+    ## share of area per group and distance class
+    ax5.set_title("d)", loc="left")
+    sns.heatmap(df_area_dist, annot=True, ax=ax5, cmap="crest", cbar=False)
+    ax5.set_xlabel("Distance to parcel [km]")
+    ax5.set_ylabel(None)
+    ax5.tick_params(axis='y', labelrotation=0)
+    ax5.tick_params(axis='x', labelrotation=0)
+    for i in range(len(labels) + 1):
+        ax5.axhline(y=i, color='w', linewidth=1)
+
+    # plt.subplots_adjust(hspace=0.1, wspace=0.4)
+    plt.tight_layout()
+    plt.savefig(out_pth[:-4] + '_b.png')
+    plt.close()
+
 
 def fig_appendix_change_in_distances_aggregation_levels(owner_df_pth, threshold, out_pth):
     print("Plot appendix figure with change in distances between the aggregation levels.")
@@ -517,15 +737,15 @@ def table_largest_owner_examples(owner_df_pth, threshold, out_pth):
     df_mcomp_agg["range_dist"] = df_mcomp_agg["max_dist"] - df_mcomp_agg["min_dist"]
     df_mcomp_agg["avg_dist_class"] = pd.cut(df_mcomp_agg["avg_dist"],
                                           bins=[0, 10, 25, 50, 250, df_mcomp_agg["avg_dist"].max()],
-                                          labels=["<10", "10 to <25", "25 to <50", "50 to <250", ">250"]
-                                          )
+                                          labels=["<10", "10 to <25", "25 to <50", "50 to <250", ">250"])
     df_mcomp_agg["avg_dist_class"] = df_mcomp_agg["avg_dist_class"].cat.add_categories("unkown").fillna("unkown")
     df_mcomp_agg["share"] = round(df_mcomp_agg["area"] / df_mcomp_agg["area"].sum() * 100, 4)
-    df_mcomp_agg = df_mcomp_agg[[ "new_category", "area", "share", "avg_dist_class", "mother_company"]]
+    df_mcomp_agg = df_mcomp_agg[["new_category", "area", "share", "avg_dist_class", "avg_dist", "mother_company"]]
     df_mcomp_agg.sort_values(by="area", ascending=False, inplace=True)
     df_mcomp_agg["area"] = round(df_mcomp_agg["area"], 0)
     df_mcomp_agg["share"] = round(df_mcomp_agg["share"], 1)
-    df_mcomp_agg.columns = ["Owner class", "Area [ha]", "Share land [%]", "Distance class", "GUO"]
+    df_mcomp_agg["avg_dist"] = round(df_mcomp_agg["avg_dist"], 0)
+    df_mcomp_agg.columns = ["Owner class", "Area [ha]", "Share land [%]", "Distance class", "Average distance", "GUO"]
     df_mcomp_agg = df_mcomp_agg.loc[df_mcomp_agg["GUO"] != "unbekannt"].copy()
 
     df_mcomp_agg = df_mcomp_agg[:100]
@@ -1925,31 +2145,16 @@ def table_number_owners_and_area_in_company_networks(owner_df_pth, threshold, ou
     df_out.to_csv(out_pth, index=False)
 
 
-def fig_owner_categories_in_concentration_ranges(df_res_pth, df_ct_pth, df_larg_own_pth, district_shp_pth, out_pth, area_threshold=7000):
-    #df_sh_pth,
+def fig_owner_categories_in_concentration_ranges(df_res_pth, df_ct_pth, district_shp_pth, out_pth, area_threshold=7000):
 
     print("Plot map and figure with share and location of the largest owner.")
 
-    grid_res = 4
-    version_4km = 1
     gdf_grid = gpd.read_file(rf"00_data\vector\grids\square_grid_4km_v01_with_12km_POLYIDs_BB.gpkg")
-    #rf"00_data\vector\grids\square_grid_{grid_res}km_v{version_4km:02d}_with_12km_POLYIDs_BB.shp"
-
     df_res = pd.read_csv(df_res_pth)
     df_ct = pd.read_csv(df_ct_pth)
-    df_lo = pd.read_csv(df_larg_own_pth)
     shp2 = gpd.read_file(district_shp_pth)
 
-    # df_sh = pd.read_csv(df_sh_pth)
-    # sub_cols = list(df_sh.columns)
-    # sub_cols = [col for col in sub_cols if "100" in col]
-    # sub_cols.append("POLYID")
-    # df_sh = df_sh[sub_cols]
-
-    df_res = pd.merge(df_res, df_ct, how="left", on="id_sp_unit") #left_on="POLYID", right_on="id_sp_unit")
-    # df_res["total_area"] = df_res["total_area"] / 10000
-    # df_res = pd.merge(df_res, df_sh, how="left", left_on="POLYID", right_on="POLYID")
-
+    df_res = pd.merge(df_res, df_ct, how="left", on="id_sp_unit")
     shp = pd.merge(gdf_grid, df_res, how='inner', left_on='POLYID', right_on='id_sp_unit')
     shp = shp.loc[shp['gini_coeff'] != 0.0]
     shp = shp.loc[shp['total_area'] > area_threshold].copy()
@@ -1962,28 +2167,32 @@ def fig_owner_categories_in_concentration_ranges(df_res_pth, df_ct_pth, df_larg_
         if count_col in list(shp.columns):
             shp.loc[shp[count_col] == 1, "top_owner_cat"] = owner_class
 
-    shp["top_owner_cat"] = shp["top_owner_cat"].map(
-        {"PUBLIC": "PU", "nCONETW": "nCN", "aCONETW": "aCN", "NONPRO": "OTH", "siCOMP": "nSC", "a_siCOMP": "aSC",
-         "noagPR": "nPR", "agriPR": "aPR", "CHURCH": "RE"})
+    class_mapping = {"PUBLIC": "Public\ninstitutions", "nCONETW": "Non-agricultural\ncompany networks",
+                     "aCONETW": "Agricultural\ncompany networks", "NONPRO": "Other\ninstitutions",
+                     "siCOMP": "Non-agricultural\nsingle companies", "a_siCOMP": "Agricultural\nsingle companies",
+                     "noagPR": "Non-agricultural\nprivate persons", "agriPR": "Agricultural\nprivate persons",
+                     "CHURCH": "Religious\ninstitutions"}
+    labels = ["Agricultural\nprivate persons", "Non-agricultural\nprivate persons", "Agricultural\nsingle companies",
+              "Non-agricultural\nsingle companies", "Agricultural\ncompany networks", "Non-agricultural\ncompany networks",
+              "Public\ninstitutions", "Other\ninstitutions", "Religious\ninstitutions"]
+    shp["top_owner_cat"] = shp["top_owner_cat"].map(class_mapping)
     shp["top_owner_cat"] = pd.Categorical(shp["top_owner_cat"],
-                                            categories=["nCN", "aCN", "PU", "RE", "nPR", "aPR", "aSC", "nSC", "OTH"],
+                                            categories=labels,
                                             ordered=True)
 
     shp.drop(columns=["owner1"], inplace=True)
-    shp3 = pd.merge(shp, df_lo, "left", left_on='POLYID', right_on='id_sp_unit')
-    shp3 = shp3.loc[~shp3["owner1"].isna()].copy()
 
     ## Map with main owner_class
     colour_dict = {
-        "aPR": '#f6f739',
-        "nPR": '#bcbd22',
-        "aSC": '#c898f5',
-        "nSC": '#9467bd',
-        "nCN": '#ff7f0e',
-        "aCN": '#fcb97e',
-        "PU": '#1f77b4',
-        "OTH": '#2ca02c',
-        "RE": '#7f7f7f'
+        "Agricultural\ncompany networks": '#f6f739',
+        "Non-agricultural\ncompany networks": '#bcbd22',
+        "Agricultural\nsingle companies": '#c898f5',
+        "Non-agricultural\nsingle companies": '#9467bd',
+        "Agricultural\nprivate persons": '#ff7f0e',
+        "Non-agricultural\nprivate persons": '#fcb97e',
+        "Public\ninstitutions": '#1f77b4',
+        "Other\ninstitutions": '#2ca02c',
+        "Religious\ninstitutions": '#7f7f7f'
     }
 
     col = "top_owner_cat"
@@ -1991,7 +2200,7 @@ def fig_owner_categories_in_concentration_ranges(df_res_pth, df_ct_pth, df_larg_
     shp = shp.loc[shp["color"].notna()].copy()
 
     custom_patches = [Patch(facecolor=colour_dict[v], label=v) for v in
-                      ["nCN", "aCN", "nPR", "aPR", "aSC", "nSC", "PU", "RE", "OTH"]]
+                      ["Non-agricultural\ncompany networks", "Agricultural\ncompany networks", "Non-agricultural\nprivate persons", "Agricultural\nprivate persons", "Agricultural\nsingle companies", "Non-agricultural\nsingle companies", "Public\ninstitutions", "Religious\ninstitutions", "Other\ninstitutions"]]
 
     print("Plotting")
 
@@ -2008,25 +2217,26 @@ def fig_owner_categories_in_concentration_ranges(df_res_pth, df_ct_pth, df_larg_
     grouped_percentage = grouped.div(grouped.sum(axis=1), axis=0)
     grouped_percentage = grouped_percentage * 100
 
-    fig, axs = plt.subplots(1, 2, figsize=plotting_lib.cm2inch(25, 12))
+    # fig, axs = plt.subplots(2, 2, figsize=plotting_lib.cm2inch(25, 12))
+    fig = plt.figure(figsize=plotting_lib.cm2inch(25, 12))
+    widths = [1.5, 1]
+    heights = [3, 1]
+    gs = fig.add_gridspec(ncols=2, nrows=2, width_ratios=widths, height_ratios=heights)
 
-    ax1 = axs[0]
-    ax2 = axs[1]
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax2 = fig.add_subplot(gs[0, 1])
+    ax3 = fig.add_subplot(gs[1, :])
+
     shp.plot(
         color=shp["color"],
         ax=ax1,
         legend=False,
         edgecolor='none'
     )
-    ax1.legend(handles=custom_patches, bbox_to_anchor=(1.1, .01), ncol=math.ceil(len(custom_patches) / 3))  # ,
 
-    # shp3.plot(
-    #     edgecolor='black',
-    #     facecolor="none",
-    #     ax=ax1,
-    #     lw=0.5,
-    #     zorder=2
-    # )
+    ax3.axis("off")
+    ax3.margins(0)
+    ax3.legend(handles=custom_patches, ncol=math.ceil(len(custom_patches) / 2), bbox_to_anchor=(1.07, 1)) #ax1 #bbox_to_anchor=(1.1, .01),
 
     shp2.plot(
         edgecolor='black',
@@ -2035,6 +2245,7 @@ def fig_owner_categories_in_concentration_ranges(df_res_pth, df_ct_pth, df_larg_
         lw=0.1,
         zorder=3
     )
+
     ax1.axis("off")
     ax1.margins(0)
     ax1.set_title("a)", loc="left")
@@ -2046,12 +2257,10 @@ def fig_owner_categories_in_concentration_ranges(df_res_pth, df_ct_pth, df_larg_
     ax2.set_xlabel('CR1 in a 12km radius [%]')
     ax2.set_ylabel('Share of owner categories [%]')
 
-    # ax2.legend(title='Owner category', bbox_to_anchor=(1.05, 1), loc='upper left', ncol=2)
     ax2.set_xticklabels(labels)
     ax2.tick_params(axis='x', labelrotation=0)
     text="Interpretation example:\nIn regions where CR1 is\nabove 30%, the\nlargest owners are only\npublic entities."
-    ax2.annotate(text, xy=(0.9, 0.8), xytext=(0.55, 0.4), xycoords='axes fraction', arrowprops=dict(facecolor='black', arrowstyle='->'), bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=1', alpha=0.7))
-    # ax2.arrow(x=0.7, y=0.5, dx=0.01, dy=0.2)
+    ax2.annotate(text, xy=(0.9, 0.2), xytext=(0.55, 0.4), xycoords='axes fraction', arrowprops=dict(facecolor='black', arrowstyle='->'), bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=1', alpha=0.7))
     ax2.set_title("b)", loc="left")
     ax2.spines['right'].set_visible(False)
     ax2.spines['top'].set_visible(False)
@@ -2061,26 +2270,6 @@ def fig_owner_categories_in_concentration_ranges(df_res_pth, df_ct_pth, df_larg_
     plt.tight_layout()
     plt.savefig(out_pth, dpi=300)
     plt.close()
-
-    # fig, ax = plt.subplots(1, 1, figsize=plotting_lib.cm2inch(20, 8))
-    #
-    # grouped.plot(kind='bar', stacked=True, color=[colour_dict.get(x) for x in grouped_percentage.columns], ax=ax)
-    #
-    # # Adding labels and title
-    # plt.xlabel('Share of largest owner in a 12km radius [%]')
-    # plt.ylabel('No. grid cells')
-    #
-    # ax.legend(title='Owner category', bbox_to_anchor=(1.05, 1), loc='upper left', ncol=2)
-    # ax.set_xticklabels(labels)
-    # ax.tick_params(axis='x', labelrotation=0)
-    # text = "Reading examples:\n1) In regions where CR1 is above\n35%, the largest owners are public\norganisations.\n\n2) In regions where CR1 is between\n30 and 35%,the largest owners are\nagricultural company networks."
-    # ax.annotate(text, xy=(1.07, -0.2), xycoords='axes fraction')
-    #
-    # fig.tight_layout()
-    # plt.tight_layout()
-    # out_pth2 = out_pth[:-3] + "_2.png"
-    # plt.savefig(out_pth2, dpi=300)
-    # plt.close()
 
 
 def fig_owner_categories_in_concentration_ranges_v2(df_res_pth, df_ct_pth, df_larg_own_pth, district_shp_pth, out_pth, area_threshold=7000):
@@ -2317,12 +2506,19 @@ def main():
     #     out_pth=OWNER_DF_FOR_PLOTTING.format(50)
     # )
 
-    # fig_share_and_characteristics_owner_categories(
+    # fig_share_and_characteristics_owner_categories_pre_revision(
     #     owner_df_pth=OWNER_DF_FOR_PLOTTING,
     #     threshold=50,
     #     out_pth=rf"14_paper_figures\figures\fig03_share_and_characteristics_owner_categories.png"
     # )
-    #
+
+    ## I must have deleted this function accidently. I recreated the function, but there is a difference in the figures
+    ## The difference is that in the heatmap the "%" signs are still missing
+    fig_share_and_characteristics_owner_categories_post_revision(
+        owner_df_pth=OWNER_DF_FOR_PLOTTING,
+        threshold=50,
+        out_pth=rf"14_paper_figures\figures\fig03_share_and_characteristics_owner_categories.png")
+
     # fig_comparison_map_and_histograms_concentration_measures_pre_revision(
     #     threshold=50,
     #     df_res_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
@@ -2331,27 +2527,27 @@ def main():
     # )
 
     ## 12km concentrations
-    fig_comparison_map_and_histograms_concentration_measures_post_revision(
-        threshold=50,
-        df_res_pth=rf"11_ownership_concentration\mw_grid_buffers\mw_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas_12km.csv",
-        district_shp_pth=DISTRICT_SHP_PTH,
-        out_pth=r"14_paper_figures\figures\fig04_comparison_histograms_concentrations_measures_12km.png",
-        area_threshold=200)
+    # fig_comparison_map_and_histograms_concentration_measures_post_revision(
+    #     threshold=50,
+    #     df_res_pth=rf"11_ownership_concentration\mw_grid_buffers\mw_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas_12km.csv",
+    #     district_shp_pth=DISTRICT_SHP_PTH,
+    #     out_pth=r"14_paper_figures\figures\fig04_comparison_histograms_concentrations_measures_12km.png",
+    #     area_threshold=200)
 
     ## 4 km concentrations
-    fig_comparison_map_and_histograms_concentration_measures_post_revision(
-        threshold=50,
-        df_res_pth=rf"11_ownership_concentration\mw_grid_buffers\mw_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas_4km.csv",
-        district_shp_pth=DISTRICT_SHP_PTH,
-        out_pth=r"14_paper_figures\figures\fig04_comparison_histograms_concentrations_measures_4km.png",
-        area_threshold=200)
+    # fig_comparison_map_and_histograms_concentration_measures_post_revision(
+    #     threshold=50,
+    #     df_res_pth=rf"11_ownership_concentration\mw_grid_buffers\mw_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas_4km.csv",
+    #     district_shp_pth=DISTRICT_SHP_PTH,
+    #     out_pth=r"14_paper_figures\figures\fig04_comparison_histograms_concentrations_measures_4km.png",
+    #     area_threshold=200)
 
     # fig_histograms_change_concentration_measures(
     #     df_res_omerge_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-owner_merge-iacs_areas.csv",
     #     df_res_mcomp_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
     #     out_pth=r"14_paper_figures\figures\fig05_histograms_change_concentration_measures.png"
     # )
-    #
+
     # fig_share_and_location_largest_owners(
     #     df_res_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
     #     df_ct_pth=rf"11_ownership_concentration\mw_grid\mw_counts_categories_in_topx-grid_4km_v01-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
@@ -2359,19 +2555,19 @@ def main():
     #     district_shp_pth=DISTRICT_SHP_PTH,
     #     out_pth=r"14_paper_figures\figures\fig06_share_and_location_largest_owners.png"
     # )
-    #
+
     # fig_appendix_change_in_distances_aggregation_levels(
     #     owner_df_pth=OWNER_DF_FOR_PLOTTING,
     #     threshold=50,
     #     out_pth=rf"14_paper_figures\figures\fig_appendix03_change_in_distances_aggregation_levels.png"
     # )
-    #
+
     # fig_appendix_characteristics_company_networks(
     #     owner_df_pth=OWNER_DF_FOR_PLOTTING,
     #     threshold=50,
     #     out_pth=rf"14_paper_figures\figures\fig_appendix04_characteristics_company_networks.png"
     # )
-    #
+
     # table_change_in_concentration_measures(
     #     cm_omerge_grid_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-owner_merge-iacs_areas.csv",
     #     cm_mcomp_grid_pth=rf"11_ownership_concentration\mw_grid\mw_mean_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
@@ -2379,7 +2575,7 @@ def main():
     #     cm_mcomp_state_pth=rf"11_ownership_concentration\state\state_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas.csv",
     #     out_pth=rf"14_paper_figures\tables\table02_change_in_concentration_measures.csv"
     # )
-    #
+
     # table_largest_owner_examples(
     #     owner_df_pth=OWNER_DF_FOR_PLOTTING,
     #     threshold=50,
@@ -2428,8 +2624,6 @@ def main():
     # fig_owner_categories_in_concentration_ranges(
     #     df_res_pth=rf"11_ownership_concentration\mw_grid_buffers\mw_conc_meas-mother_companies-comm_w_thr{threshold}-iacs_areas_12km.csv",
     #     df_ct_pth=rf"11_ownership_concentration\mw_grid_buffers\mw_counts_categories_in_topx-mother_companies-comm_w_thr{threshold}-iacs_areas_12km.csv",
-    #     df_larg_own_pth=fr"15_additional_analysis\largest_owners\_community_distribution\polygons_largest_15_owners.csv",
-    #     # df_sh_pth=rf"11_ownership_concentration\mw_grid\mw_mean_share_counts_categories-mother_companies-comm_w_thr50-iacs_areas.csv",
     #     district_shp_pth=DISTRICT_SHP_PTH,
     #     out_pth=r"14_paper_figures\figures\fig05_owner_categories_in_concentration_ranges_12km.png",
     #     area_threshold=200

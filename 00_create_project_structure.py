@@ -35,6 +35,8 @@ def main():
     helper_functions.create_folder("12_ownership_concentration_plotting")
     helper_functions.create_folder("13_general_statistics")
     helper_functions.create_folder("14_paper_figures")
+    helper_functions.create_folder("15_additional_analysis")
+    helper_functions.create_folder("16_other_figures")
 
     etime = time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime())
     print("start: " + stime)
